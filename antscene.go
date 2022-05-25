@@ -4,11 +4,18 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
+type gridspot struct {
+	foodPher int
+	homePher int
+	food     int
+	home     bool
+}
+
 const antTexSize = 8
 
 type AntScene struct {
 	ants     []Ant
-	grid     [WIDTH][HEIGHT]point
+	grid     [WIDTH][HEIGHT]gridspot
 	textures []*sdl.Texture
 }
 
@@ -34,9 +41,9 @@ func (as *AntScene) Init(g *Game[GameState], r *sdl.Renderer, s *GameState) erro
 func (as *AntScene) Update(g *Game[GameState], r *sdl.Renderer, s *GameState) error {
 	for a := range as.ants {
 		if as.ants[a].food > 0 {
-			as.grid[as.ants[a].pos.x][as.ants[a].pos.y].x += as.ants[a].marker
+			as.grid[as.ants[a].pos.x][as.ants[a].pos.y].foodPher += as.ants[a].marker
 		} else {
-			as.grid[as.ants[a].pos.x][as.ants[a].pos.y].y += as.ants[a].marker
+			as.grid[as.ants[a].pos.x][as.ants[a].pos.y].homePher += as.ants[a].marker
 		}
 
 		as.ants[a].Move(as)
@@ -52,10 +59,10 @@ func (as *AntScene) Update(g *Game[GameState], r *sdl.Renderer, s *GameState) er
 	}
 	for x := range as.grid {
 		for y := range as.grid[x] {
-			if as.grid[x][y].x > 0 {
-				as.grid[x][y].x -= 1
-			} else if as.grid[x][y].y > 0 {
-				as.grid[x][y].y -= 1
+			if as.grid[x][y].foodPher > 0 {
+				as.grid[x][y].foodPher -= 1
+			} else if as.grid[x][y].homePher > 0 {
+				as.grid[x][y].homePher -= 1
 			}
 		}
 	}
@@ -72,34 +79,34 @@ func (as *AntScene) Render(g *Game[GameState], r *sdl.Renderer, s *GameState) er
 	bs := make([]uint32, WIDTH*HEIGHT+1)
 	for y := range as.grid[0] {
 		for x := range as.grid {
-			hasx := as.grid[x][y].x > 1000
-			hasy := as.grid[x][y].y > 1000
-			if hasx || hasy {
+			hasFood := as.grid[x][y].foodPher > 1000
+			hasHome := as.grid[x][y].homePher > 1000
+			if hasFood || hasHome {
 				pt := point{x, y}
 				if pt.Within(1, 1, WIDTH-2, HEIGHT-2) {
-					if hasx {
+					if hasFood {
 						for d := N; d < END; d++ {
 							pt2 := pt.PointAt(d)
-							as.grid[pt2.x][pt2.y].x += (as.grid[x][y].x / 9)
+							as.grid[pt2.x][pt2.y].foodPher += (as.grid[x][y].foodPher / 9)
 						}
-						as.grid[x][y].x /= 9
+						as.grid[x][y].foodPher /= 9
 					}
-					if hasy {
+					if hasHome {
 						for d := N; d < END; d++ {
 							pt2 := pt.PointAt(d)
-							as.grid[pt2.x][pt2.y].y += (as.grid[x][y].y / 9)
+							as.grid[pt2.x][pt2.y].homePher += (as.grid[x][y].homePher / 9)
 						}
-						as.grid[x][y].y /= 9
+						as.grid[x][y].homePher /= 9
 					}
 				}
 			}
 
-			vg := uint32((float32(as.grid[x][y].x) / 500.0) * 255.0)
+			vg := uint32((float32(as.grid[x][y].foodPher) / 500.0) * 255.0)
 			if vg >= 255 {
 				vg = 254
 			}
 			vg = (vg & 0xFF) << 16
-			vr := uint32((float32(as.grid[x][y].y) / 500.0) * 255.0)
+			vr := uint32((float32(as.grid[x][y].homePher) / 500.0) * 255.0)
 			if vr >= 255 {
 				vr = 254
 			}

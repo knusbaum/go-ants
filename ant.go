@@ -85,12 +85,12 @@ type Ant struct {
 	marker int
 }
 
-func (a *Ant) GridAt(an *AntScene, d direction) (point, bool) {
+func (a *Ant) GridAt(an *AntScene, d direction) (gridspot, bool) {
 	np := a.pos.PointAt(d)
 	if np.Within(0, 0, WIDTH, HEIGHT) {
 		return an.grid[np.x][np.y], true
 	}
-	return point{}, false
+	return gridspot{}, false
 }
 
 func (d direction) Left(n int) direction {
@@ -158,7 +158,7 @@ func (a *Ant) OctantRect(d direction, size int) sdl.Rect {
 	return sdl.Rect{int32(start.x), int32(start.y), int32(end.x - start.x), int32(end.y - start.y)}
 }
 
-func (a *Ant) SumOctant(an *AntScene, d direction, size int) point {
+func (a *Ant) SumOctant(an *AntScene, d direction, size int) gridspot {
 	var (
 		start point
 		end   point
@@ -205,13 +205,13 @@ func (a *Ant) SumOctant(an *AntScene, d direction, size int) point {
 		end.x = a.pos.x
 		end.y = a.pos.y
 	}
-	var pt point
+	var pt gridspot
 	for x := start.x; x < end.x; x++ {
 		for y := start.y; y < end.y; y++ {
 			p := point{x, y}
 			if p.Within(0, 0, WIDTH, HEIGHT) {
-				pt.x += an.grid[x][y].x
-				pt.y += an.grid[x][y].y
+				pt.foodPher += an.grid[x][y].foodPher
+				pt.homePher += an.grid[x][y].homePher
 			}
 		}
 	}
@@ -224,15 +224,15 @@ func (a *Ant) Move(an *AntScene) {
 	right := a.SumOctant(an, a.dir.Right(1), 50)
 
 	if a.food > 0 {
-		if right.y > straight.y && right.y > left.y {
+		if right.homePher > straight.homePher && right.homePher > left.homePher {
 			a.dir = a.dir.Right(1)
-		} else if left.y > straight.y && left.y > right.y {
+		} else if left.homePher > straight.homePher && left.homePher > right.homePher {
 			a.dir = a.dir.Left(1)
 		}
 	} else {
-		if right.x > straight.x && right.x > left.x {
+		if right.foodPher > straight.foodPher && right.foodPher > left.foodPher {
 			a.dir = a.dir.Right(1)
-		} else if left.x > straight.x && left.x > right.x {
+		} else if left.foodPher > straight.foodPher && left.foodPher > right.foodPher {
 			a.dir = a.dir.Left(1)
 		}
 	}
