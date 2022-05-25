@@ -11,17 +11,35 @@ type gridspot struct {
 	home     bool
 }
 
-const antTexSize = 8
+const antTexSize = 3
 
 type AntScene struct {
-	ants     []Ant
-	grid     [WIDTH][HEIGHT]gridspot
-	textures []*sdl.Texture
+	ants       []Ant
+	grid       [WIDTH][HEIGHT]gridspot
+	textures   []*sdl.Texture
+	renderPher bool
+	propPher   bool
 }
 
 var _ Scene[GameState] = &AntScene{}
 
+func (as *AntScene) HandleEvent(g *Game[GameState], r *sdl.Renderer, e sdl.Event) error {
+	if e.GetType() == sdl.KEYDOWN {
+		k := e.(*sdl.KeyboardEvent)
+		keyname := sdl.GetKeyName(sdl.GetKeyFromScancode(k.Keysym.Scancode))
+		switch keyname {
+		case "P":
+			as.renderPher = !as.renderPher
+		case "Y":
+			as.propPher = !as.propPher
+		}
+	}
+	return nil
+}
+
 func (as *AntScene) Init(g *Game[GameState], r *sdl.Renderer, s *GameState) error {
+	as.renderPher = true
+	as.propPher = false
 	as.textures = make([]*sdl.Texture, int(END))
 	for i := N; i < END; i++ {
 		t, err := r.CreateTexture(uint32(sdl.PIXELFORMAT_RGBA8888), sdl.TEXTUREACCESS_STATIC, antTexSize, antTexSize)
@@ -35,27 +53,59 @@ func (as *AntScene) Init(g *Game[GameState], r *sdl.Renderer, s *GameState) erro
 		}
 		as.textures[i].UpdateRGBA(nil, bs, antTexSize)
 	}
+
+	for x := 500; x < 520; x++ {
+		for y := 500; y < 520; y++ {
+			as.grid[x][y].food = 10
+		}
+	}
+
+	for x := 800; x < 820; x++ {
+		for y := 500; y < 520; y++ {
+			as.grid[x][y].food = 10
+		}
+	}
+
+	for x := 500; x < 520; x++ {
+		for y := 800; y < 820; y++ {
+			as.grid[x][y].food = 10
+		}
+	}
+
+	for x := 0; x < 100; x++ {
+		for y := 0; y < 100; y++ {
+			as.grid[x][y].home = true
+		}
+	}
+
 	return nil
 }
 
 func (as *AntScene) Update(g *Game[GameState], r *sdl.Renderer, s *GameState) error {
 	for a := range as.ants {
-		if as.ants[a].food > 0 {
-			as.grid[as.ants[a].pos.x][as.ants[a].pos.y].foodPher += as.ants[a].marker
-		} else {
-			as.grid[as.ants[a].pos.x][as.ants[a].pos.y].homePher += as.ants[a].marker
-		}
-
 		as.ants[a].Move(as)
-		nx, ny := as.ants[a].pos.x, as.ants[a].pos.y
-		if nx > 500 && nx < 600 && ny > 500 && ny < 600 {
-			as.ants[a].food = 100
-			as.ants[a].marker = 5000
-		} else if nx < 100 && ny < 100 {
+		if as.grid[as.ants[a].pos.x][as.ants[a].pos.y].home {
 			as.ants[a].food = 0
 			as.ants[a].marker = 5000
 		}
+		if as.grid[as.ants[a].pos.x][as.ants[a].pos.y].food > 0 {
+			if as.ants[a].food == 0 {
+				as.ants[a].dir = as.ants[a].dir.Right(4)
+				as.grid[as.ants[a].pos.x][as.ants[a].pos.y].food -= 10
+				as.ants[a].food = 10
+			}
+			as.ants[a].marker = 5000
+		}
 
+		if as.ants[a].food > 0 {
+			if as.grid[as.ants[a].pos.x][as.ants[a].pos.y].foodPher < 100000 {
+				as.grid[as.ants[a].pos.x][as.ants[a].pos.y].foodPher += as.ants[a].marker
+			}
+		} else {
+			if as.grid[as.ants[a].pos.x][as.ants[a].pos.y].homePher < 100000 {
+				as.grid[as.ants[a].pos.x][as.ants[a].pos.y].homePher += as.ants[a].marker
+			}
+		}
 	}
 	for x := range as.grid {
 		for y := range as.grid[x] {
@@ -75,65 +125,76 @@ func (as *AntScene) Render(g *Game[GameState], r *sdl.Renderer, s *GameState) er
 		return err
 	}
 	defer t.Destroy()
-
 	bs := make([]uint32, WIDTH*HEIGHT+1)
 	for y := range as.grid[0] {
 		for x := range as.grid {
-			hasFood := as.grid[x][y].foodPher > 1000
-			hasHome := as.grid[x][y].homePher > 1000
-			if hasFood || hasHome {
-				pt := point{x, y}
-				if pt.Within(1, 1, WIDTH-2, HEIGHT-2) {
-					if hasFood {
-						for d := N; d < END; d++ {
-							pt2 := pt.PointAt(d)
-							as.grid[pt2.x][pt2.y].foodPher += (as.grid[x][y].foodPher / 9)
+			if as.propPher {
+				hasFood := as.grid[x][y].foodPher > 1000
+				hasHome := as.grid[x][y].homePher > 1000
+				if hasFood || hasHome {
+					pt := point{x, y}
+					if pt.Within(1, 1, WIDTH-2, HEIGHT-2) {
+						if hasFood {
+							for d := N; d < END; d++ {
+								pt2 := pt.PointAt(d)
+								as.grid[pt2.x][pt2.y].foodPher += (as.grid[x][y].foodPher / 9)
+							}
+							as.grid[x][y].foodPher /= 9
 						}
-						as.grid[x][y].foodPher /= 9
-					}
-					if hasHome {
-						for d := N; d < END; d++ {
-							pt2 := pt.PointAt(d)
-							as.grid[pt2.x][pt2.y].homePher += (as.grid[x][y].homePher / 9)
+						if hasHome {
+							for d := N; d < END; d++ {
+								pt2 := pt.PointAt(d)
+								as.grid[pt2.x][pt2.y].homePher += (as.grid[x][y].homePher / 9)
+							}
+							as.grid[x][y].homePher /= 9
 						}
-						as.grid[x][y].homePher /= 9
 					}
 				}
 			}
 
-			vg := uint32((float32(as.grid[x][y].foodPher) / 500.0) * 255.0)
-			if vg >= 255 {
-				vg = 254
+			if as.grid[x][y].food > 0 {
+				bs[x+y*WIDTH] = 0x33FF33FF
+				continue
+			} else if as.grid[x][y].home {
+				bs[x+y*WIDTH] = 0xFF3333FF
+				continue
 			}
-			vg = (vg & 0xFF) << 16
-			vr := uint32((float32(as.grid[x][y].homePher) / 500.0) * 255.0)
-			if vr >= 255 {
-				vr = 254
-			}
-			vr = (vr & 0xFF) << 24
-			// 			var (
-			// 				vg uint32
-			// 				vr uint32
-			// 			)
-			// 			if as.grid[x][y].x > 0 {
-			// 				vg = 0xFF << 16
-			// 			}
-			// 			if as.grid[x][y].y > 0 {
-			// 				vr = 0xFF << 24
-			// 			}
+			if as.renderPher {
+				vg := uint32((float32(as.grid[x][y].foodPher) / 500.0) * 255.0)
+				if vg >= 255 {
+					vg = 254
+				}
+				vg = (vg & 0xFF) << 16
+				vr := uint32((float32(as.grid[x][y].homePher) / 500.0) * 255.0)
+				if vr >= 255 {
+					vr = 254
+				}
+				vr = (vr & 0xFF) << 24
+				// 			var (
+				// 				vg uint32
+				// 				vr uint32
+				// 			)
+				// 			if as.grid[x][y].x > 0 {
+				// 				vg = 0xFF << 16
+				// 			}
+				// 			if as.grid[x][y].y > 0 {
+				// 				vr = 0xFF << 24
+				// 			}
 
-			bs[x+y*WIDTH] = 0x000000FF | vg | vr
+				bs[x+y*WIDTH] = 0x000000FF | vg | vr
+			}
 		}
 	}
-	for a := range as.ants {
-		if as.ants[a].food > 0 {
-			bs[as.ants[a].pos.x+as.ants[a].pos.y*WIDTH] |= 0xFFFFFFFF
-		} else {
-			bs[as.ants[a].pos.x+as.ants[a].pos.y*WIDTH] |= 0x8888FFFF
-		}
-	}
+	// 	for a := range as.ants {
+	// 		if as.ants[a].food > 0 {
+	// 			bs[as.ants[a].pos.x+as.ants[a].pos.y*WIDTH] |= 0xFFFFFFFF
+	// 		} else {
+	// 			bs[as.ants[a].pos.x+as.ants[a].pos.y*WIDTH] |= 0x8888FFFF
+	// 		}
+	// 	}
 	t.UpdateRGBA(nil, bs, WIDTH)
 	r.Copy(t, nil, nil)
+
 	for a := range as.ants {
 		// 		r.SetDrawColor(0xFF, 0x00, 0xFF, 0xFF)
 		// 		for i := as.ants[a].dir.Left(1); i <= as.ants[a].dir.Right(1); i++ {

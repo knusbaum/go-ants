@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
+	"time"
 
 	"github.com/veandco/go-sdl2/sdl"
 )
@@ -15,6 +17,7 @@ type Game[T any] struct {
 }
 
 func NewGame[T any](w, h int32) (*Game[T], error) {
+	rand.Seed(time.Now().UnixNano())
 	g := Game[T]{}
 	window, err := sdl.CreateWindow("test", 0, 0,
 		w, h, sdl.WINDOW_SHOWN)

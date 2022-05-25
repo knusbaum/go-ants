@@ -3,7 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
-	"math/rand"
+	"os"
+	"runtime/pprof"
 
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
@@ -80,10 +81,21 @@ func main() {
 	defer g.Destroy()
 	//g.PushScene(&LineScene{0, 0, 100, 100})
 	ants := make([]Ant, 100)
-	for i := 0; i < 100; i++ {
-		ants[i] = Ant{pos: point{x: rand.Intn(WIDTH), y: rand.Intn(HEIGHT)}, food: 0} //rand.Intn(2)}
-	}
+	// 	for i := 0; i < 1000; i++ {
+	// 		ants[i] = Ant{pos: point{x: rand.Intn(WIDTH), y: rand.Intn(HEIGHT)}, food: 0} //rand.Intn(2)}
+	// 	}
 	g.PushScene(&AntScene{ants: ants})
+
+	f, err := os.Create("ants.cpu")
+	if err != nil {
+		log.Fatal("could not create CPU profile: ", err)
+	}
+	defer f.Close() // error handling omitted for example
+	if err := pprof.StartCPUProfile(f); err != nil {
+		log.Fatal("could not start CPU profile: ", err)
+	}
+	defer pprof.StopCPUProfile()
+
 	err = g.Run()
 	fmt.Printf("Finished: %v\n", err)
 

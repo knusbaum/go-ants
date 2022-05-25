@@ -210,8 +210,8 @@ func (a *Ant) SumOctant(an *AntScene, d direction, size int) gridspot {
 		for y := start.y; y < end.y; y++ {
 			p := point{x, y}
 			if p.Within(0, 0, WIDTH, HEIGHT) {
-				pt.foodPher += an.grid[x][y].foodPher
-				pt.homePher += an.grid[x][y].homePher
+				pt.foodPher += an.grid[x][y].foodPher // - (an.grid[x][y].homePher / 4)
+				pt.homePher += an.grid[x][y].homePher // - (an.grid[x][y].foodPher / 4)
 			}
 		}
 	}
@@ -219,29 +219,46 @@ func (a *Ant) SumOctant(an *AntScene, d direction, size int) gridspot {
 }
 
 func (a *Ant) Move(an *AntScene) {
-	straight := a.SumOctant(an, a.dir, 50)
-	left := a.SumOctant(an, a.dir.Left(1), 50)
-	right := a.SumOctant(an, a.dir.Right(1), 50)
 
-	if a.food > 0 {
-		if right.homePher > straight.homePher && right.homePher > left.homePher {
-			a.dir = a.dir.Right(1)
-		} else if left.homePher > straight.homePher && left.homePher > right.homePher {
-			a.dir = a.dir.Left(1)
-		}
-	} else {
-		if right.foodPher > straight.foodPher && right.foodPher > left.foodPher {
-			a.dir = a.dir.Right(1)
-		} else if left.foodPher > straight.foodPher && left.foodPher > right.foodPher {
-			a.dir = a.dir.Left(1)
-		}
-	}
+	if n := rand.Intn(5); n == 0 {
+		straight := a.SumOctant(an, a.dir, 50)
+		left := a.SumOctant(an, a.dir.Left(1), 50)
+		right := a.SumOctant(an, a.dir.Right(1), 50)
 
-	n := rand.Intn(40)
-	if n == 0 {
-		a.dir = a.dir.Left(1)
-	} else if n == 1 {
-		a.dir = a.dir.Right(1)
+		// 	if a.food > 0 {
+		// 		if right.homePher-right.foodPher > straight.homePher-straight.foodPher && right.homePher-right.foodPher > left.homePher-left.foodPher {
+		// 			a.dir = a.dir.Right(1)
+		// 		} else if left.homePher-left.foodPher > straight.homePher-straight.foodPher && left.homePher-left.foodPher > right.homePher-right.foodPher {
+		// 			a.dir = a.dir.Left(1)
+		// 		}
+		// 	} else {
+		// 		if right.foodPher-right.homePher > straight.foodPher-straight.homePher && right.foodPher-right.homePher > left.foodPher-left.homePher {
+		// 			a.dir = a.dir.Right(1)
+		// 		} else if left.foodPher-left.homePher > straight.foodPher-straight.homePher && left.foodPher-left.homePher > right.foodPher-right.homePher {
+		// 			a.dir = a.dir.Left(1)
+		// 		}
+		// 	}
+
+		if a.food > 0 {
+			if right.homePher > straight.homePher && right.homePher > left.homePher {
+				a.dir = a.dir.Right(1)
+			} else if left.homePher > straight.homePher && left.homePher > right.homePher {
+				a.dir = a.dir.Left(1)
+			}
+		} else {
+			if right.foodPher > straight.foodPher && right.foodPher > left.foodPher {
+				a.dir = a.dir.Right(1)
+			} else if left.foodPher > straight.foodPher && left.foodPher > right.foodPher {
+				a.dir = a.dir.Left(1)
+			}
+		}
+
+		n := rand.Intn(10)
+		if n == 0 {
+			a.dir = a.dir.Left(1)
+		} else if n == 1 {
+			a.dir = a.dir.Right(1)
+		}
 	}
 
 	if _, ok := a.GridAt(an, a.dir); !ok {
