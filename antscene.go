@@ -4,12 +4,32 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
+const antTexSize = 8
+
 type AntScene struct {
-	ants []Ant
-	grid [WIDTH][HEIGHT]point
+	ants     []Ant
+	grid     [WIDTH][HEIGHT]point
+	textures []*sdl.Texture
 }
 
 var _ Scene[GameState] = &AntScene{}
+
+func (as *AntScene) Init(g *Game[GameState], r *sdl.Renderer, s *GameState) error {
+	as.textures = make([]*sdl.Texture, int(END))
+	for i := N; i < END; i++ {
+		t, err := r.CreateTexture(uint32(sdl.PIXELFORMAT_RGBA8888), sdl.TEXTUREACCESS_STATIC, antTexSize, antTexSize)
+		if err != nil {
+			return err
+		}
+		as.textures[i] = t
+		bs := make([]uint32, antTexSize*antTexSize+1)
+		for j := 0; j < antTexSize*antTexSize+1; j++ {
+			bs[j] = 0xc35b31ff
+		}
+		as.textures[i].UpdateRGBA(nil, bs, antTexSize)
+	}
+	return nil
+}
 
 func (as *AntScene) Update(g *Game[GameState], r *sdl.Renderer, s *GameState) error {
 	for a := range as.ants {
@@ -32,9 +52,6 @@ func (as *AntScene) Update(g *Game[GameState], r *sdl.Renderer, s *GameState) er
 	}
 	for x := range as.grid {
 		for y := range as.grid[x] {
-			// 			if x < 100 || x > WIDTH-100 || y < 100 || y > HEIGHT-100 {
-			// 				as.grid[x][y].x = 100
-			// 			}
 			if as.grid[x][y].x > 0 {
 				as.grid[x][y].x -= 1
 			} else if as.grid[x][y].y > 0 {
@@ -66,11 +83,6 @@ func (as *AntScene) Render(g *Game[GameState], r *sdl.Renderer, s *GameState) er
 							as.grid[pt2.x][pt2.y].x += (as.grid[x][y].x / 9)
 						}
 						as.grid[x][y].x /= 9
-						// 						for d := N; d < END; d++ {
-						// 							pt2 := pt.PointAt(d)
-						// 							as.grid[pt2.x][pt2.y].x += 1
-						// 						}
-						// 						as.grid[x][y].x -= 8
 					}
 					if hasy {
 						for d := N; d < END; d++ {
@@ -78,35 +90,30 @@ func (as *AntScene) Render(g *Game[GameState], r *sdl.Renderer, s *GameState) er
 							as.grid[pt2.x][pt2.y].y += (as.grid[x][y].y / 9)
 						}
 						as.grid[x][y].y /= 9
-						// 						for d := N; d < END; d++ {
-						// 							pt2 := pt.PointAt(d)
-						// 							as.grid[pt2.x][pt2.y].y += 1
-						// 						}
-						// 						as.grid[x][y].y -= 8
 					}
 				}
 			}
 
-			// 			vg := uint32(as.grid[x][y].x)
-			// 			if vg > 255 {
-			// 				vg = 255
-			// 			}
-			// 			vg = (vg & 0xFF) << 16
-			// 			vr := uint32(as.grid[x][y].y)
-			// 			if vr > 255 {
-			// 				vr = 255
-			// 			}
-			// 			vr = (vr & 0xFF) << 24
-			var (
-				vg uint32
-				vr uint32
-			)
-			if as.grid[x][y].x > 0 {
-				vg = 0xFF << 16
+			vg := uint32(as.grid[x][y].x)
+			if vg > 255 {
+				vg = 255
 			}
-			if as.grid[x][y].y > 0 {
-				vr = 0xFF << 24
+			vg = (vg & 0xFF) << 16
+			vr := uint32(as.grid[x][y].y)
+			if vr > 255 {
+				vr = 255
 			}
+			vr = (vr & 0xFF) << 24
+			// 			var (
+			// 				vg uint32
+			// 				vr uint32
+			// 			)
+			// 			if as.grid[x][y].x > 0 {
+			// 				vg = 0xFF << 16
+			// 			}
+			// 			if as.grid[x][y].y > 0 {
+			// 				vr = 0xFF << 24
+			// 			}
 
 			bs[x+y*WIDTH] = 0x000000FF | vg | vr
 		}
@@ -120,12 +127,17 @@ func (as *AntScene) Render(g *Game[GameState], r *sdl.Renderer, s *GameState) er
 	}
 	t.UpdateRGBA(nil, bs, WIDTH)
 	r.Copy(t, nil, nil)
-	// 	for a := range as.ants {
-	// 		r.SetDrawColor(0xFF, 0x00, 0xFF, 0xFF)
-	// 		rct := as.ants[a].OctantRect(N, 50)
-	// 		fmt.Printf("RECT: %#v\n", rct)
-	// 		r.FillRect(&rct)
-	// 	}
+	for a := range as.ants {
+		// 		r.SetDrawColor(0xFF, 0x00, 0xFF, 0xFF)
+		// 		for i := as.ants[a].dir.Left(1); i <= as.ants[a].dir.Right(1); i++ {
+		// 			rct := as.ants[a].OctantRect(i, 30)
+		// 			//fmt.Printf("RECT: %#v\n", rct)
+		// 			r.FillRect(&rct)
+		// 		}
+		dst := sdl.Rect{int32(as.ants[a].pos.x - (antTexSize / 2)), int32(as.ants[a].pos.y - (antTexSize / 2)), antTexSize, antTexSize}
+		r.Copy(as.textures[as.ants[a].dir], nil, &dst)
+
+	}
 	return nil
 }
 

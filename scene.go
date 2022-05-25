@@ -14,3 +14,7 @@ type Scene[T any] interface {
 type EventHandler[T any] interface {
 	HandleEvent(*Game[T], *sdl.Renderer, sdl.Event) error
 }
+
+type Initer[T any] interface {
+	Init(*Game[T], *sdl.Renderer, *T) error
+}

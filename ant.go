@@ -108,34 +108,6 @@ func (d direction) Right(n int) direction {
 	return d
 }
 
-// func (a *Ant) canMove() bool {
-// 	nx, ny := a.x, a.y
-// 	switch d {
-// 	case N:
-// 		ny -= 1
-// 	case NE:
-// 		ny -= 1
-// 		nx -= 1
-// 	case E:
-// 		nx -= 1
-// 	case SE:
-// 		ny += 1
-// 		nx -= 1
-// 	case S:
-// 		ny += 1
-// 	case SW:
-// 		ny += 1
-// 		nx += 1
-// 	case W:
-// 		nx += 1
-// 	case NW:
-// 		ny -= 1
-// 		nx += 1
-// 	}
-// 	if nx < 0 || nx >= WIDTH || ny < 0 || ny >= HEIGHT {
-//
-// }
-
 func (a *Ant) OctantRect(d direction, size int) sdl.Rect {
 	var (
 		start point
@@ -247,8 +219,6 @@ func (a *Ant) SumOctant(an *AntScene, d direction, size int) point {
 }
 
 func (a *Ant) Move(an *AntScene) {
-	//fmt.Printf("MOVE\n")
-
 	straight := a.SumOctant(an, a.dir, 50)
 	left := a.SumOctant(an, a.dir.Left(1), 50)
 	right := a.SumOctant(an, a.dir.Right(1), 50)
@@ -266,32 +236,7 @@ func (a *Ant) Move(an *AntScene) {
 			a.dir = a.dir.Left(1)
 		}
 	}
-	// 		fmt.Printf("Straight: (%d, %d)\n", straight.x, straight.y)
-	// 		fmt.Printf("Left: (%d, %d)\n", left.x, left.y)
-	// 		fmt.Printf("Right: (%d, %d)\n", right.x, right.y)
-	// 	nd := a.dir
-	// 	noct := a.SumOctant(an, nd, 10)
-	// 	if a.food > 0 {
-	// 		for i := N; i < END; i++ {
-	// 			oct := a.SumOctant(an, i, 10)
-	// 			if oct.y > noct.y {
-	// 				nd = i
-	// 				noct = oct
-	// 			}
-	// 			//fmt.Printf("(Y) %v : %d | ", i, oct.y)
-	// 		}
-	// 	} else {
-	// 		for i := N; i < END; i++ {
-	// 			oct := a.SumOctant(an, i, 10)
-	// 			if oct.x > noct.x {
-	// 				nd = i
-	// 				noct = oct
-	// 			}
-	// 			//fmt.Printf("(X) %v : %d | ", i, oct.x)
-	// 		}
-	// 	}
-	// 	//fmt.Printf("CHOSE %v\n", nd)
-	// 	a.dir = nd
+
 	n := rand.Intn(40)
 	if n == 0 {
 		a.dir = a.dir.Left(1)
@@ -299,14 +244,12 @@ func (a *Ant) Move(an *AntScene) {
 		a.dir = a.dir.Right(1)
 	}
 
-	//fmt.Printf("CHECK POINT %d\n", a.dir)
 	if _, ok := a.GridAt(an, a.dir); !ok {
 		a.dir = a.dir.Right(4)
 		_, ok := a.GridAt(an, a.dir)
 		for ; !ok; _, ok = a.GridAt(an, a.dir) {
 			a.dir = a.dir.Right(1)
 		}
-		//fmt.Printf("FLIPPED POINT %d\n", a.dir)
 	}
 
 	a.pos = a.pos.PointAt(a.dir)
@@ -314,86 +257,4 @@ func (a *Ant) Move(an *AntScene) {
 	if a.marker > 0 {
 		a.marker -= 5
 	}
-
-	//if a.marker < 10 && a.food > 0 {
-	//if a.food > 0 && an.grid[a.x][a.y].x > 0 {
-	//	a.marker = 10
-	//}
-	// 		else if an.grid[a.x][a.y].y > 0 {
-	// 			a.marker = 1
-	// 		}
-	//	}
-
-	//fmt.Printf("BX: %d, Y: %d\n", a.x, a.y)
 }
-
-// func (a *Ant) checkg(an *AntScene, x, y int, val int) bool {
-// 	if x > 0 && x < WIDTH && y > 0 && y < HEIGHT {
-// 		return an.grid[x][y].x > val
-// 	}
-// 	return false
-// }
-//
-// func (a *Ant) checkl(an *AntScene, x, y int, val int) bool {
-// 	if x > 0 && x < WIDTH && y > 0 && y < HEIGHT {
-// 		return an.grid[x][y].y > val
-// 	}
-// 	return false
-// }
-//
-// func (a *Ant) selectDirection(as *AntScene) (int, int) {
-// 	return 0, 0
-// 	//
-// 	// 	val := int(0)
-// 	// 	nx := a.x
-// 	// 	ny := a.y
-// 	//
-// 	// 	for i := a.x - 1; i < a.x+2; i++ {
-// 	// 		for j := a.y - 1; j < a.y+2; j++ {
-// 	// 			if a.food > 0 {
-// 	// 				if a.checkl(as, i, j, val) {
-// 	// 					nx = i
-// 	// 					ny = j
-// 	// 					val = as.grid[i][j].y
-// 	// 				}
-// 	// 			} else {
-// 	// 				if a.checkg(as, i, j, val) {
-// 	// 					nx = i
-// 	// 					ny = j
-// 	// 					val = as.grid[i][j].x - as.grid[i][j].y
-// 	// 				}
-// 	// 			}
-// 	// 		}
-// 	// 	}
-// 	// 	if nx == a.x && ny == a.y {
-// 	// 		nx := a.x + a.dirx
-// 	// 		ny := a.y + a.diry
-// 	// 		r := rand.Intn(50)
-// 	// 		for r == 0 || nx < 0 || nx >= WIDTH || ny < 0 || ny >= HEIGHT {
-// 	// 			a.dirx = rand.Intn(3) - 1
-// 	// 			a.diry = rand.Intn(3) - 1
-// 	// 			nx = a.x + a.dirx
-// 	// 			ny = a.y + a.diry
-// 	// 			r = rand.Intn(100)
-// 	// 		}
-// 	//
-// 	// 		// 		bs := make([]point, 0, 8)
-// 	// 		// 		for i := a.x - 1; i < a.x+2; i++ {
-// 	// 		// 			if i == a.x {
-// 	// 		// 				continue
-// 	// 		// 			}
-// 	// 		// 			for j := a.y - 1; j < a.y+2; j++ {
-// 	// 		// 				if j == a.y {
-// 	// 		// 					continue
-// 	// 		// 				}
-// 	// 		// 				if i > 0 && i < WIDTH && j > 0 && j < HEIGHT {
-// 	// 		// 					bs = append(bs, point{i, j})
-// 	// 		// 				}
-// 	// 		// 			}
-// 	// 		// 		}
-// 	// 		// 		pt := bs[rand.Intn(len(bs))]
-// 	// 		// 		return pt.x, pt.y
-// 	// 		return nx, ny
-// 	// 	}
-// 	// 	return nx, ny
-// }
