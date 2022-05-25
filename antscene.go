@@ -72,8 +72,8 @@ func (as *AntScene) Render(g *Game[GameState], r *sdl.Renderer, s *GameState) er
 	bs := make([]uint32, WIDTH*HEIGHT+1)
 	for y := range as.grid[0] {
 		for x := range as.grid {
-			hasx := as.grid[x][y].x > 700
-			hasy := as.grid[x][y].y > 700
+			hasx := as.grid[x][y].x > 1000
+			hasy := as.grid[x][y].y > 1000
 			if hasx || hasy {
 				pt := point{x, y}
 				if pt.Within(1, 1, WIDTH-2, HEIGHT-2) {
@@ -94,14 +94,14 @@ func (as *AntScene) Render(g *Game[GameState], r *sdl.Renderer, s *GameState) er
 				}
 			}
 
-			vg := uint32(as.grid[x][y].x)
-			if vg > 255 {
-				vg = 255
+			vg := uint32((float32(as.grid[x][y].x) / 500.0) * 255.0)
+			if vg >= 255 {
+				vg = 254
 			}
 			vg = (vg & 0xFF) << 16
-			vr := uint32(as.grid[x][y].y)
-			if vr > 255 {
-				vr = 255
+			vr := uint32((float32(as.grid[x][y].y) / 500.0) * 255.0)
+			if vr >= 255 {
+				vr = 254
 			}
 			vr = (vr & 0xFF) << 24
 			// 			var (
