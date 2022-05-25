@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"math/rand"
 
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
@@ -79,9 +78,9 @@ func main() {
 	}
 	defer g.Destroy()
 	//g.PushScene(&LineScene{0, 0, 100, 100})
-	ants := make([]Ant, 10)
-	for i := 0; i < 10; i++ {
-		ants[i] = Ant{x: rand.Intn(WIDTH), y: rand.Intn(HEIGHT), food: 0}
+	ants := make([]Ant, 1000)
+	for i := 0; i < 1000; i++ {
+		ants[i] = Ant{x: 0, y: 0, food: 0}
 	}
 	g.PushScene(&AntScene{ants: ants})
 	err = g.Run()
