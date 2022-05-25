@@ -1,6 +1,9 @@
 package main
 
 import (
+	"reflect"
+	"unsafe"
+
 	"github.com/veandco/go-sdl2/sdl"
 )
 
@@ -17,6 +20,7 @@ type AntScene struct {
 	ants       []Ant
 	grid       [WIDTH][HEIGHT]gridspot
 	textures   []*sdl.Texture
+	sceneTex   *sdl.Texture
 	renderPher bool
 	propPher   bool
 }
@@ -30,6 +34,12 @@ func (as *AntScene) HandleEvent(g *Game[GameState], r *sdl.Renderer, e sdl.Event
 		switch keyname {
 		case "P":
 			as.renderPher = !as.renderPher
+			t, err := r.CreateTexture(uint32(sdl.PIXELFORMAT_RGBA8888), sdl.TEXTUREACCESS_STREAMING, WIDTH, HEIGHT)
+			if err != nil {
+				return err
+			}
+			as.sceneTex.Destroy()
+			as.sceneTex = t
 		case "Y":
 			as.propPher = !as.propPher
 		}
@@ -40,6 +50,12 @@ func (as *AntScene) HandleEvent(g *Game[GameState], r *sdl.Renderer, e sdl.Event
 func (as *AntScene) Init(g *Game[GameState], r *sdl.Renderer, s *GameState) error {
 	as.renderPher = true
 	as.propPher = false
+	t, err := r.CreateTexture(uint32(sdl.PIXELFORMAT_RGBA8888), sdl.TEXTUREACCESS_STREAMING, WIDTH, HEIGHT)
+	if err != nil {
+		return err
+	}
+	as.sceneTex = t
+
 	as.textures = make([]*sdl.Texture, int(END))
 	for i := N; i < END; i++ {
 		t, err := r.CreateTexture(uint32(sdl.PIXELFORMAT_RGBA8888), sdl.TEXTUREACCESS_STATIC, antTexSize, antTexSize)
@@ -98,11 +114,11 @@ func (as *AntScene) Update(g *Game[GameState], r *sdl.Renderer, s *GameState) er
 		}
 
 		if as.ants[a].food > 0 {
-			if as.grid[as.ants[a].pos.x][as.ants[a].pos.y].foodPher < 100000 {
+			if as.grid[as.ants[a].pos.x][as.ants[a].pos.y].foodPher < 5000 {
 				as.grid[as.ants[a].pos.x][as.ants[a].pos.y].foodPher += as.ants[a].marker
 			}
 		} else {
-			if as.grid[as.ants[a].pos.x][as.ants[a].pos.y].homePher < 100000 {
+			if as.grid[as.ants[a].pos.x][as.ants[a].pos.y].homePher < 5000 {
 				as.grid[as.ants[a].pos.x][as.ants[a].pos.y].homePher += as.ants[a].marker
 			}
 		}
@@ -120,12 +136,15 @@ func (as *AntScene) Update(g *Game[GameState], r *sdl.Renderer, s *GameState) er
 }
 
 func (as *AntScene) Render(g *Game[GameState], r *sdl.Renderer, s *GameState) error {
-	t, err := r.CreateTexture(uint32(sdl.PIXELFORMAT_RGBA8888), sdl.TEXTUREACCESS_STREAMING, WIDTH, HEIGHT)
+	bsb, _, err := as.sceneTex.Lock(nil)
 	if err != nil {
 		return err
 	}
-	defer t.Destroy()
-	bs := make([]uint32, WIDTH*HEIGHT+1)
+	var bs []uint32
+	sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&bs))
+	sliceHeader.Cap = int(len(bsb) / 4)
+	sliceHeader.Len = int(len(bsb) / 4)
+	sliceHeader.Data = uintptr(unsafe.Pointer(&bsb[0]))
 	for y := range as.grid[0] {
 		for x := range as.grid {
 			if as.propPher {
@@ -160,16 +179,16 @@ func (as *AntScene) Render(g *Game[GameState], r *sdl.Renderer, s *GameState) er
 				continue
 			}
 			if as.renderPher {
-				vg := uint32((float32(as.grid[x][y].foodPher) / 500.0) * 255.0)
-				if vg >= 255 {
-					vg = 254
+				vg := uint32(as.grid[x][y].foodPher / 2) //uint32((float32(as.grid[x][y].foodPher) / 500.0) * 255.0)
+				if vg > 255 {
+					vg = 255
 				}
-				vg = (vg & 0xFF) << 16
-				vr := uint32((float32(as.grid[x][y].homePher) / 500.0) * 255.0)
-				if vr >= 255 {
-					vr = 254
+				vg = vg << 16
+				vr := uint32(as.grid[x][y].homePher / 2) //uint32((float32(as.grid[x][y].homePher) / 500.0) * 255.0)
+				if vr > 255 {
+					vr = 255
 				}
-				vr = (vr & 0xFF) << 24
+				vr = vr << 24
 				// 			var (
 				// 				vg uint32
 				// 				vr uint32
@@ -180,8 +199,9 @@ func (as *AntScene) Render(g *Game[GameState], r *sdl.Renderer, s *GameState) er
 				// 			if as.grid[x][y].y > 0 {
 				// 				vr = 0xFF << 24
 				// 			}
-
 				bs[x+y*WIDTH] = 0x000000FF | vg | vr
+			} else {
+				bs[x+y*WIDTH] = 0
 			}
 		}
 	}
@@ -192,8 +212,8 @@ func (as *AntScene) Render(g *Game[GameState], r *sdl.Renderer, s *GameState) er
 	// 			bs[as.ants[a].pos.x+as.ants[a].pos.y*WIDTH] |= 0x8888FFFF
 	// 		}
 	// 	}
-	t.UpdateRGBA(nil, bs, WIDTH)
-	r.Copy(t, nil, nil)
+	as.sceneTex.Unlock()
+	r.Copy(as.sceneTex, nil, nil)
 
 	for a := range as.ants {
 		// 		r.SetDrawColor(0xFF, 0x00, 0xFF, 0xFF)
