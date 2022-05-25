@@ -18,46 +18,82 @@ const (
 	END // Used for modular arithmetic
 )
 
+type point struct {
+	x int
+	y int
+}
+
+func (p point) PointAt(d direction) point {
+	np := point{p.x, p.y}
+	switch d {
+	case N:
+		np.y -= 1
+	case NE:
+		np.y -= 1
+		np.x -= 1
+	case E:
+		np.x -= 1
+	case SE:
+		np.y += 1
+		np.x -= 1
+	case S:
+		np.y += 1
+	case SW:
+		np.y += 1
+		np.x += 1
+	case W:
+		np.x += 1
+	case NW:
+		np.y -= 1
+		np.x += 1
+	}
+	return np
+}
+
+func (p point) Within(x, y, w, h int) bool {
+	return p.x >= x && p.x < x+w && p.y >= y && p.y < y+h
+}
+
 type Ant struct {
-	x      int
-	y      int
+	pos    point
 	dir    direction
 	food   int
 	marker int
 }
 
-type choice struct {
-	turn uint8
-}
-
-func (a *Ant) PointAt(an *AntScene, d direction) (point, bool) {
-	nx, ny := a.x, a.y
-	switch d {
-	case N:
-		ny -= 1
-	case NE:
-		ny -= 1
-		nx -= 1
-	case E:
-		nx -= 1
-	case SE:
-		ny += 1
-		nx -= 1
-	case S:
-		ny += 1
-	case SW:
-		ny += 1
-		nx += 1
-	case W:
-		nx += 1
-	case NW:
-		ny -= 1
-		nx += 1
+func (a *Ant) GridAt(an *AntScene, d direction) (point, bool) {
+	np := a.pos.PointAt(d)
+	if np.Within(0, 0, WIDTH, HEIGHT) {
+		return an.grid[np.x][np.y], true
 	}
-	if nx < 0 || nx >= WIDTH || ny < 0 || ny >= HEIGHT {
-		return point{}, false
-	}
-	return an.grid[nx][ny], true
+	return point{}, false
+	// 	nx, ny := a.x, a.y
+	// 	switch d {
+	// 	case N:
+	// 		ny -= 1
+	// 	case NE:
+	// 		ny -= 1
+	// 		nx -= 1
+	// 	case E:
+	// 		nx -= 1
+	// 	case SE:
+	// 		ny += 1
+	// 		nx -= 1
+	// 	case S:
+	// 		ny += 1
+	// 	case SW:
+	// 		ny += 1
+	// 		nx += 1
+	// 	case W:
+	// 		nx += 1
+	// 	case NW:
+	// 		ny -= 1
+	// 		nx += 1
+	// 	}
+	// 	if nx < 0 || nx >= WIDTH || ny < 0 || ny >= HEIGHT {
+	// 		return point{}, false
+	// 	}
+	// 	return an.grid[nx][ny], true
 }
 
 func (d direction) Left(n int) direction {
@@ -105,88 +141,90 @@ func (d direction) Right(n int) direction {
 
 func (a *Ant) Move(an *AntScene) {
 	//fmt.Printf("MOVE\n")
-	n := rand.Intn(40)
+	n := rand.Intn(400)
 	if n == 0 {
 		a.dir = a.dir.Left(1)
 	} else if n == 1 {
 		a.dir = a.dir.Right(1)
 	}
 	left, right := point{}, point{}
-	if p, ok := a.PointAt(an, a.dir.Left(1)); ok {
+	if p, ok := a.GridAt(an, a.dir.Left(1)); ok {
 		left.x += p.x
 		left.y += p.y
 	}
-	if p, ok := a.PointAt(an, a.dir.Left(2)); ok {
+	if p, ok := a.GridAt(an, a.dir.Left(2)); ok {
 		left.x += p.x
 		left.y += p.y
 	}
-	if p, ok := a.PointAt(an, a.dir.Right(1)); ok {
+	if p, ok := a.GridAt(an, a.dir.Right(1)); ok {
 		right.x += p.x
 		right.y += p.y
 	}
-	if p, ok := a.PointAt(an, a.dir.Right(2)); ok {
+	if p, ok := a.GridAt(an, a.dir.Right(2)); ok {
 		right.x += p.x
 		right.y += p.y
 	}
 	if a.food > 0 {
-		if right.y > left.y {
+		if right.y-right.x > left.y-left.x {
 			a.dir = a.dir.Right(1)
-		} else if left.y > right.y {
+		} else if left.y-left.x > right.y-right.x {
 			a.dir = a.dir.Left(1)
 		}
 	} else {
-		if right.x > left.x {
+		if right.x-right.y > left.x-left.y {
 			a.dir = a.dir.Right(1)
-		} else if left.x > right.x {
+		} else if left.x-left.y > right.x-right.y {
 			a.dir = a.dir.Left(1)
 		}
 	}
 
 	//fmt.Printf("CHECK POINT %d\n", a.dir)
-	if _, ok := a.PointAt(an, a.dir); !ok {
+	if _, ok := a.GridAt(an, a.dir); !ok {
 		a.dir = a.dir.Right(4)
-		_, ok := a.PointAt(an, a.dir)
-		for ; !ok; _, ok = a.PointAt(an, a.dir) {
+		_, ok := a.GridAt(an, a.dir)
+		for ; !ok; _, ok = a.GridAt(an, a.dir) {
 			a.dir = a.dir.Right(1)
 		}
 		//fmt.Printf("FLIPPED POINT %d\n", a.dir)
 	}
 	//nx, ny := a.x, a.y
 	//fmt.Printf("AX: %d, Y: %d\n", a.x, a.y)
-	switch a.dir {
-	case N:
-		a.y -= 1
-	case NE:
-		a.y -= 1
-		a.x -= 1
-	case E:
-		a.x -= 1
-	case SE:
-		a.y += 1
-		a.x -= 1
-	case S:
-		a.y += 1
-	case SW:
-		a.y += 1
-		a.x += 1
-	case W:
-		a.x += 1
-	case NW:
-		a.y -= 1
-		a.x += 1
-	}
+	np := a.pos.PointAt(a.dir)
+	a.pos = np
+	// 	switch a.dir {
+	// 	case N:
+	// 		a.y -= 1
+	// 	case NE:
+	// 		a.y -= 1
+	// 		a.x -= 1
+	// 	case E:
+	// 		a.x -= 1
+	// 	case SE:
+	// 		a.y += 1
+	// 		a.x -= 1
+	// 	case S:
+	// 		a.y += 1
+	// 	case SW:
+	// 		a.y += 1
+	// 		a.x += 1
+	// 	case W:
+	// 		a.x += 1
+	// 	case NW:
+	// 		a.y -= 1
+	// 		a.x += 1
+	// 	}
 	if a.marker > 0 {
-		a.marker--
+		a.marker -= 1
 	}
 
-	if a.marker < 10 && a.food > 0 {
-		//if a.food > 0 && an.grid[a.x][a.y].x > 0 {
-		a.marker = 10
-		//}
-		// 		else if an.grid[a.x][a.y].y > 0 {
-		// 			a.marker = 1
-		// 		}
-	}
+	//if a.marker < 10 && a.food > 0 {
+	//if a.food > 0 && an.grid[a.x][a.y].x > 0 {
+	//	a.marker = 10
+	//}
+	// 		else if an.grid[a.x][a.y].y > 0 {
+	// 			a.marker = 1
+	// 		}
+	//	}
 
 	//fmt.Printf("BX: %d, Y: %d\n", a.x, a.y)
 }
