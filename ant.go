@@ -1,8 +1,6 @@
 package main
 
-import (
-	"math/rand"
-)
+import "math/rand"
 
 type direction int
 
@@ -67,33 +65,6 @@ func (a *Ant) GridAt(an *AntScene, d direction) (point, bool) {
 		return an.grid[np.x][np.y], true
 	}
 	return point{}, false
-	// 	nx, ny := a.x, a.y
-	// 	switch d {
-	// 	case N:
-	// 		ny -= 1
-	// 	case NE:
-	// 		ny -= 1
-	// 		nx -= 1
-	// 	case E:
-	// 		nx -= 1
-	// 	case SE:
-	// 		ny += 1
-	// 		nx -= 1
-	// 	case S:
-	// 		ny += 1
-	// 	case SW:
-	// 		ny += 1
-	// 		nx += 1
-	// 	case W:
-	// 		nx += 1
-	// 	case NW:
-	// 		ny -= 1
-	// 		nx += 1
-	// 	}
-	// 	if nx < 0 || nx >= WIDTH || ny < 0 || ny >= HEIGHT {
-	// 		return point{}, false
-	// 	}
-	// 	return an.grid[nx][ny], true
 }
 
 func (d direction) Left(n int) direction {
@@ -139,44 +110,112 @@ func (d direction) Right(n int) direction {
 //
 // }
 
+func (a *Ant) SumOctant(an *AntScene, d direction, size int) point {
+	var (
+		start point
+		end   point
+	)
+	switch d {
+	case N:
+		start.x = a.pos.x - (size / 2)
+		start.y = a.pos.y - size
+		end.x = a.pos.x + (size / 2)
+		end.y = a.pos.y
+	case NE:
+		start.x = a.pos.x
+		start.y = a.pos.y - size
+		end.x = a.pos.x + size
+		end.y = a.pos.y
+	case E:
+		start.x = a.pos.x
+		start.y = a.pos.y - (size / 2)
+		end.x = a.pos.x + size
+		end.y = a.pos.y + (size / 2)
+	case SE:
+		start.x = a.pos.x
+		start.y = a.pos.y
+		end.x = a.pos.x + size
+		end.y = a.pos.y + size
+	case S:
+		start.x = a.pos.x - (size / 2)
+		start.y = a.pos.y
+		end.x = a.pos.x + (size / 2)
+		end.y = a.pos.y + size
+	case SW:
+		start.x = a.pos.x - size
+		start.y = a.pos.y
+		end.x = a.pos.x
+		end.y = a.pos.y + size
+	case W:
+		start.x = a.pos.x - size
+		start.y = a.pos.y - (size / 2)
+		end.x = a.pos.x
+		end.y = a.pos.y + (size / 2)
+	case NW:
+		start.x = a.pos.x - size
+		start.y = a.pos.y - size
+		end.x = a.pos.x
+		end.y = a.pos.y
+	}
+	var pt point
+	for x := start.x; x < end.x; x++ {
+		for y := start.y; y < end.y; y++ {
+			p := point{x, y}
+			if p.Within(0, 0, WIDTH, HEIGHT) {
+				pt.x += an.grid[x][y].x
+				pt.y += an.grid[x][y].y
+			}
+		}
+	}
+	return pt
+}
+
 func (a *Ant) Move(an *AntScene) {
 	//fmt.Printf("MOVE\n")
-	n := rand.Intn(400)
+	n := rand.Intn(40)
 	if n == 0 {
 		a.dir = a.dir.Left(1)
 	} else if n == 1 {
 		a.dir = a.dir.Right(1)
 	}
-	left, right := point{}, point{}
-	if p, ok := a.GridAt(an, a.dir.Left(1)); ok {
-		left.x += p.x
-		left.y += p.y
-	}
-	if p, ok := a.GridAt(an, a.dir.Left(2)); ok {
-		left.x += p.x
-		left.y += p.y
-	}
-	if p, ok := a.GridAt(an, a.dir.Right(1)); ok {
-		right.x += p.x
-		right.y += p.y
-	}
-	if p, ok := a.GridAt(an, a.dir.Right(2)); ok {
-		right.x += p.x
-		right.y += p.y
-	}
+
+	// 	straight := a.SumOctant(an, a.dir, 50)
+	// 	left := a.SumOctant(an, a.dir.Left(1), 50)
+	// 	right := a.SumOctant(an, a.dir.Right(1), 50)
+	//
+	// 	if a.food > 0 {
+	// 		if right.y > straight.y && right.y > left.y {
+	// 			a.dir = a.dir.Right(1)
+	// 		} else if left.y > straight.y && left.y > right.y {
+	// 			a.dir = a.dir.Left(1)
+	// 		}
+	// 	} else {
+	// 		if right.x > straight.x && right.x > left.x {
+	// 			a.dir = a.dir.Right(1)
+	// 		} else if left.x > straight.x && left.x > right.x {
+	// 			a.dir = a.dir.Left(1)
+	// 		}
+	// 	}
+	nd := a.dir
+	noct := a.SumOctant(an, nd, 100)
 	if a.food > 0 {
-		if right.y-right.x > left.y-left.x {
-			a.dir = a.dir.Right(1)
-		} else if left.y-left.x > right.y-right.x {
-			a.dir = a.dir.Left(1)
+		for i := N; i < END; i++ {
+			oct := a.SumOctant(an, i, 100)
+			if oct.y > noct.y {
+				nd = i
+				noct = oct
+			}
 		}
 	} else {
-		if right.x-right.y > left.x-left.y {
-			a.dir = a.dir.Right(1)
-		} else if left.x-left.y > right.x-right.y {
-			a.dir = a.dir.Left(1)
+		for i := N; i < END; i++ {
+			oct := a.SumOctant(an, i, 100)
+			if oct.x > noct.x {
+				nd = i
+				noct = oct
+			}
 		}
 	}
+	a.dir = nd
 
 	//fmt.Printf("CHECK POINT %d\n", a.dir)
 	if _, ok := a.GridAt(an, a.dir); !ok {
@@ -187,32 +226,9 @@ func (a *Ant) Move(an *AntScene) {
 		}
 		//fmt.Printf("FLIPPED POINT %d\n", a.dir)
 	}
-	//nx, ny := a.x, a.y
-	//fmt.Printf("AX: %d, Y: %d\n", a.x, a.y)
-	np := a.pos.PointAt(a.dir)
-	a.pos = np
-	// 	switch a.dir {
-	// 	case N:
-	// 		a.y -= 1
-	// 	case NE:
-	// 		a.y -= 1
-	// 		a.x -= 1
-	// 	case E:
-	// 		a.x -= 1
-	// 	case SE:
-	// 		a.y += 1
-	// 		a.x -= 1
-	// 	case S:
-	// 		a.y += 1
-	// 	case SW:
-	// 		a.y += 1
-	// 		a.x += 1
-	// 	case W:
-	// 		a.x += 1
-	// 	case NW:
-	// 		a.y -= 1
-	// 		a.x += 1
-	// 	}
+
+	a.pos = a.pos.PointAt(a.dir)
+
 	if a.marker > 0 {
 		a.marker -= 1
 	}

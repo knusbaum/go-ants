@@ -79,8 +79,8 @@ func main() {
 	}
 	defer g.Destroy()
 	//g.PushScene(&LineScene{0, 0, 100, 100})
-	ants := make([]Ant, 1000)
-	for i := 0; i < 1000; i++ {
+	ants := make([]Ant, 100)
+	for i := 0; i < 100; i++ {
 		ants[i] = Ant{pos: point{x: rand.Intn(WIDTH), y: rand.Intn(HEIGHT)}, food: 0} //rand.Intn(2)}
 	}
 	g.PushScene(&AntScene{ants: ants})
