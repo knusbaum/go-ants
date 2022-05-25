@@ -18,24 +18,23 @@ func (as *AntScene) Update(g *Game[GameState], r *sdl.Renderer, s *GameState) er
 		} else {
 			as.grid[as.ants[a].pos.x][as.ants[a].pos.y].y += as.ants[a].marker
 		}
-		// 		nx, ny := as.ants[a].selectDirection(as)
-		// 		as.ants[a].x = nx
-		// 		as.ants[a].y = ny
+
 		as.ants[a].Move(as)
 		nx, ny := as.ants[a].pos.x, as.ants[a].pos.y
 		if nx > 500 && nx < 600 && ny > 500 && ny < 600 {
 			as.ants[a].food = 100
-			as.ants[a].marker = 1000
+			as.ants[a].marker = 5000
 		} else if nx < 100 && ny < 100 {
 			as.ants[a].food = 0
-			as.ants[a].marker = 1000
+			as.ants[a].marker = 5000
 		}
-		// else if as.ants[a].marker > 0 {
-		//	as.ants[a].marker -= 1
-		//	}
+
 	}
 	for x := range as.grid {
 		for y := range as.grid[x] {
+			// 			if x < 100 || x > WIDTH-100 || y < 100 || y > HEIGHT-100 {
+			// 				as.grid[x][y].x = 100
+			// 			}
 			if as.grid[x][y].x > 0 {
 				as.grid[x][y].x -= 1
 			} else if as.grid[x][y].y > 0 {
@@ -56,34 +55,34 @@ func (as *AntScene) Render(g *Game[GameState], r *sdl.Renderer, s *GameState) er
 	bs := make([]uint32, WIDTH*HEIGHT+1)
 	for y := range as.grid[0] {
 		for x := range as.grid {
-			hasx := as.grid[x][y].x > 81
-			hasy := as.grid[x][y].y > 81
+			hasx := as.grid[x][y].x > 700
+			hasy := as.grid[x][y].y > 700
 			if hasx || hasy {
 				pt := point{x, y}
 				if pt.Within(1, 1, WIDTH-2, HEIGHT-2) {
 					if hasx {
-						// 						for d := N; d < END; d++ {
-						// 							pt2 := pt.PointAt(d)
-						// 							as.grid[pt2.x][pt2.y].x += (as.grid[x][y].x / 9)
-						// 						}
-						// 						as.grid[x][y].x /= 9
 						for d := N; d < END; d++ {
 							pt2 := pt.PointAt(d)
-							as.grid[pt2.x][pt2.y].x += 1
+							as.grid[pt2.x][pt2.y].x += (as.grid[x][y].x / 9)
 						}
-						as.grid[x][y].x -= 8
+						as.grid[x][y].x /= 9
+						// 						for d := N; d < END; d++ {
+						// 							pt2 := pt.PointAt(d)
+						// 							as.grid[pt2.x][pt2.y].x += 1
+						// 						}
+						// 						as.grid[x][y].x -= 8
 					}
 					if hasy {
-						// 						for d := N; d < END; d++ {
-						// 							pt2 := pt.PointAt(d)
-						// 							as.grid[pt2.x][pt2.y].y += (as.grid[x][y].y / 9)
-						// 						}
-						// 						as.grid[x][y].y /= 9
 						for d := N; d < END; d++ {
 							pt2 := pt.PointAt(d)
-							as.grid[pt2.x][pt2.y].y += 1
+							as.grid[pt2.x][pt2.y].y += (as.grid[x][y].y / 9)
 						}
-						as.grid[x][y].y -= 8
+						as.grid[x][y].y /= 9
+						// 						for d := N; d < END; d++ {
+						// 							pt2 := pt.PointAt(d)
+						// 							as.grid[pt2.x][pt2.y].y += 1
+						// 						}
+						// 						as.grid[x][y].y -= 8
 					}
 				}
 			}
@@ -121,6 +120,12 @@ func (as *AntScene) Render(g *Game[GameState], r *sdl.Renderer, s *GameState) er
 	}
 	t.UpdateRGBA(nil, bs, WIDTH)
 	r.Copy(t, nil, nil)
+	// 	for a := range as.ants {
+	// 		r.SetDrawColor(0xFF, 0x00, 0xFF, 0xFF)
+	// 		rct := as.ants[a].OctantRect(N, 50)
+	// 		fmt.Printf("RECT: %#v\n", rct)
+	// 		r.FillRect(&rct)
+	// 	}
 	return nil
 }
 
