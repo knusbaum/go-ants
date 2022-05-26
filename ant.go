@@ -105,6 +105,9 @@ func (d direction) Left(n int) direction {
 func (d direction) Right(n int) direction {
 	d += direction(n)
 	d = d % END
+	if d < 0 {
+		d += END
+	}
 	return d
 }
 
@@ -209,9 +212,12 @@ func (a *Ant) SumOctant(an *AntScene, d direction, size int) gridspot {
 	for x := start.x; x < end.x; x++ {
 		for y := start.y; y < end.y; y++ {
 			p := point{x, y}
-			if p.Within(0, 0, WIDTH, HEIGHT) {
-				pt.foodPher += an.grid[x][y].foodPher // - (an.grid[x][y].homePher / 4)
-				pt.homePher += an.grid[x][y].homePher // - (an.grid[x][y].foodPher / 4)
+			if p.Within(0, 0, WIDTH, HEIGHT) && !an.grid[x][y].wall {
+				pt.foodPher += an.grid[x][y].foodPher + an.grid[x][y].food*10000 // - (an.grid[x][y].homePher / 4)
+				pt.homePher += an.grid[x][y].homePher                            // - (an.grid[x][y].foodPher / 4)
+				if an.grid[x][y].home {
+					pt.homePher += 10000
+				}
 			}
 		}
 	}
@@ -219,25 +225,10 @@ func (a *Ant) SumOctant(an *AntScene, d direction, size int) gridspot {
 }
 
 func (a *Ant) Move(an *AntScene) {
-
-	if n := rand.Intn(5); n == 0 {
+	if n := rand.Intn(10); n == 0 {
 		straight := a.SumOctant(an, a.dir, 50)
 		left := a.SumOctant(an, a.dir.Left(1), 50)
 		right := a.SumOctant(an, a.dir.Right(1), 50)
-
-		// 	if a.food > 0 {
-		// 		if right.homePher-right.foodPher > straight.homePher-straight.foodPher && right.homePher-right.foodPher > left.homePher-left.foodPher {
-		// 			a.dir = a.dir.Right(1)
-		// 		} else if left.homePher-left.foodPher > straight.homePher-straight.foodPher && left.homePher-left.foodPher > right.homePher-right.foodPher {
-		// 			a.dir = a.dir.Left(1)
-		// 		}
-		// 	} else {
-		// 		if right.foodPher-right.homePher > straight.foodPher-straight.homePher && right.foodPher-right.homePher > left.foodPher-left.homePher {
-		// 			a.dir = a.dir.Right(1)
-		// 		} else if left.foodPher-left.homePher > straight.foodPher-straight.homePher && left.foodPher-left.homePher > right.foodPher-right.homePher {
-		// 			a.dir = a.dir.Left(1)
-		// 		}
-		// 	}
 
 		if a.food > 0 {
 			if right.homePher > straight.homePher && right.homePher > left.homePher {
@@ -261,17 +252,25 @@ func (a *Ant) Move(an *AntScene) {
 		}
 	}
 
-	if _, ok := a.GridAt(an, a.dir); !ok {
-		a.dir = a.dir.Right(4)
-		_, ok := a.GridAt(an, a.dir)
-		for ; !ok; _, ok = a.GridAt(an, a.dir) {
+	if g, ok := a.GridAt(an, a.dir); !ok || g.wall {
+		a.dir = a.dir.Right((rand.Intn(3) - 1) * 2)
+		g, ok := a.GridAt(an, a.dir)
+		i := 0
+		for ; !ok || g.wall; g, ok = a.GridAt(an, a.dir) {
+			//fmt.Printf("SPIN\n")
 			a.dir = a.dir.Right(1)
+			i++
+			if i >= 8 {
+				a.pos.x = 1
+				a.pos.y = 1
+				return
+			}
 		}
 	}
 
 	a.pos = a.pos.PointAt(a.dir)
 
-	if a.marker > 0 {
-		a.marker -= 5
-	}
+	// 	if a.marker > 0 {
+	// 		a.marker -= 8
+	// 	}
 }
