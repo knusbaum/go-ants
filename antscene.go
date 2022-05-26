@@ -17,11 +17,11 @@ type gridspot struct {
 }
 
 const antTexSize = 3
-const foodCount = 1
+const foodCount = 10
 const pheromoneMax = 1000
 const marker = 2000
 const fadeDivisor = 500 // bigger number, slower pheromone fade.
-const pheromoneExtend = 0
+const pheromoneExtend = 10
 
 type AntScene struct {
 	ants        []Ant
@@ -130,10 +130,11 @@ func (as *AntScene) HandleEvent(g *Game[GameState], r *sdl.Renderer, e sdl.Event
 }
 
 func (as *AntScene) Init(g *Game[GameState], r *sdl.Renderer, s *GameState) error {
-	as.renderPher = true
+	as.renderPher = false
 	as.renderGreen = true
 	as.renderRed = true
 	as.propPher = false
+	as.pause = true
 	t, err := r.CreateTexture(uint32(sdl.PIXELFORMAT_RGBA8888), sdl.TEXTUREACCESS_STREAMING, WIDTH, HEIGHT)
 	if err != nil {
 		return err
@@ -154,23 +155,23 @@ func (as *AntScene) Init(g *Game[GameState], r *sdl.Renderer, s *GameState) erro
 		as.textures[i].UpdateRGBA(nil, bs, antTexSize)
 	}
 
-	for x := 500; x < 520; x++ {
-		for y := 500; y < 520; y++ {
-			as.grid[x][y].food = foodCount
-		}
-	}
-
-	for x := 800; x < 820; x++ {
-		for y := 500; y < 520; y++ {
-			as.grid[x][y].food = foodCount
-		}
-	}
-
-	for x := 500; x < 520; x++ {
-		for y := 800; y < 820; y++ {
-			as.grid[x][y].food = foodCount
-		}
-	}
+	// 	for x := 500; x < 520; x++ {
+	// 		for y := 500; y < 520; y++ {
+	// 			as.grid[x][y].food = foodCount
+	// 		}
+	// 	}
+	//
+	// 	for x := 800; x < 820; x++ {
+	// 		for y := 500; y < 520; y++ {
+	// 			as.grid[x][y].food = foodCount
+	// 		}
+	// 	}
+	//
+	// 	for x := 500; x < 520; x++ {
+	// 		for y := 800; y < 820; y++ {
+	// 			as.grid[x][y].food = foodCount
+	// 		}
+	// 	}
 
 	for x := 0; x < 100; x++ {
 		for y := 0; y < 100; y++ {
@@ -292,16 +293,16 @@ func (as *AntScene) Render(g *Game[GameState], r *sdl.Renderer, s *GameState) er
 	sliceHeader.Cap = int(len(bsb) / 4)
 	sliceHeader.Len = int(len(bsb) / 4)
 	sliceHeader.Data = uintptr(unsafe.Pointer(&bsb[0]))
-	maxFoodPher := 0
-	maxHomePher := 0
+	//maxFoodPher := 0
+	//maxHomePher := 0
 	for y := range as.grid[0] {
 		for x := range as.grid {
-			if as.grid[x][y].homePher > maxHomePher {
-				maxHomePher = as.grid[x][y].homePher
-			}
-			if as.grid[x][y].foodPher > maxFoodPher {
-				maxFoodPher = as.grid[x][y].foodPher
-			}
+			// 			if as.grid[x][y].homePher > maxHomePher {
+			// 				maxHomePher = as.grid[x][y].homePher
+			// 			}
+			// 			if as.grid[x][y].foodPher > maxFoodPher {
+			// 				maxFoodPher = as.grid[x][y].foodPher
+			// 			}
 			if as.grid[x][y].wall {
 				bs[x+y*WIDTH] = 0x333333FF
 				continue
@@ -331,16 +332,6 @@ func (as *AntScene) Render(g *Game[GameState], r *sdl.Renderer, s *GameState) er
 					}
 					vr = vr << 24
 				}
-				// 			var (
-				// 				vg uint32
-				// 				vr uint32
-				// 			)
-				// 			if as.grid[x][y].x > 0 {
-				// 				vg = 0xFF << 16
-				// 			}
-				// 			if as.grid[x][y].y > 0 {
-				// 				vr = 0xFF << 24
-				// 			}
 				bs[x+y*WIDTH] = 0x000000FF | vg | vr
 			} else {
 				bs[x+y*WIDTH] = 0
@@ -368,7 +359,7 @@ func (as *AntScene) Render(g *Game[GameState], r *sdl.Renderer, s *GameState) er
 		r.Copy(as.textures[as.ants[a].dir], nil, &dst)
 
 	}
-	fmt.Printf("Max Food: %d, Max Home: %d\n", maxFoodPher, maxHomePher)
+	//fmt.Printf("Max Food: %d, Max Home: %d\n", maxFoodPher, maxHomePher)
 	return nil
 }
 
