@@ -45,6 +45,7 @@ func (g *Game[T]) Destroy() {
 
 func (g *Game[T]) Run() error {
 	for {
+		// 		start := sdl.GetTicks64()
 		h, ok := g.scenes[len(g.scenes)-1].(EventHandler[T])
 
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
@@ -73,6 +74,14 @@ func (g *Game[T]) Run() error {
 			}
 		}
 		g.r.Present()
+		// 		end := sdl.GetTicks64()
+		// 		fmt.Printf("%d FPS\n", 1000/(end-start))
+		// 		next := start + 20
+		// 		fmt.Printf("next: %d, end: %d\n", next, end)
+		// 		if next > end {
+		// 			fmt.Printf("DELAY: %d\n", next-end)
+		// 			//sdl.Delay(uint32(next - end))
+		// 		}
 		//sdl.Delay(1)
 	}
 	return nil

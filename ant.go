@@ -212,13 +212,21 @@ func (a *Ant) SumOctant(an *AntScene, d direction, size int) gridspot {
 	for x := start.x; x < end.x; x++ {
 		for y := start.y; y < end.y; y++ {
 			p := point{x, y}
-			if p.Within(0, 0, WIDTH, HEIGHT) && !an.grid[x][y].wall {
-				pt.foodPher += an.grid[x][y].foodPher + an.grid[x][y].food*10000 // - (an.grid[x][y].homePher / 4)
-				pt.homePher += an.grid[x][y].homePher                            // - (an.grid[x][y].foodPher / 4)
-				if an.grid[x][y].home {
-					pt.homePher += 10000
+			if p.Within(0, 0, WIDTH, HEIGHT) && !an.grid[x][y].Wall {
+				pt.FoodPher += an.grid[x][y].FoodPher + an.grid[x][y].Food*100000 // - (an.grid[x][y].homePher / 4)
+				pt.HomePher += an.grid[x][y].HomePher                             // - (an.grid[x][y].foodPher / 4)
+				if an.grid[x][y].Home {
+					pt.HomePher += 100000
 				}
 			}
+		}
+	}
+	if an.pherOverload {
+		if pt.FoodPher > pheromoneMax*an.pherOverloadFactor {
+			pt.FoodPher = pheromoneMax * an.pherOverloadFactor
+		}
+		if pt.HomePher > pheromoneMax*an.pherOverloadFactor {
+			pt.HomePher = pheromoneMax * an.pherOverloadFactor
 		}
 	}
 	return pt
@@ -231,15 +239,15 @@ func (a *Ant) Move(an *AntScene) {
 		right := a.SumOctant(an, a.dir.Right(1), 50)
 
 		if a.food > 0 {
-			if right.homePher > straight.homePher && right.homePher > left.homePher {
+			if right.HomePher > straight.HomePher && right.HomePher > left.HomePher {
 				a.dir = a.dir.Right(1)
-			} else if left.homePher > straight.homePher && left.homePher > right.homePher {
+			} else if left.HomePher > straight.HomePher && left.HomePher > right.HomePher {
 				a.dir = a.dir.Left(1)
 			}
 		} else {
-			if right.foodPher > straight.foodPher && right.foodPher > left.foodPher {
+			if right.FoodPher > straight.FoodPher && right.FoodPher > left.FoodPher {
 				a.dir = a.dir.Right(1)
-			} else if left.foodPher > straight.foodPher && left.foodPher > right.foodPher {
+			} else if left.FoodPher > straight.FoodPher && left.FoodPher > right.FoodPher {
 				a.dir = a.dir.Left(1)
 			}
 		}
@@ -252,11 +260,11 @@ func (a *Ant) Move(an *AntScene) {
 		}
 	}
 
-	if g, ok := a.GridAt(an, a.dir); !ok || g.wall {
+	if g, ok := a.GridAt(an, a.dir); !ok || g.Wall {
 		a.dir = a.dir.Right((rand.Intn(3) - 1) * 2)
 		g, ok := a.GridAt(an, a.dir)
 		i := 0
-		for ; !ok || g.wall; g, ok = a.GridAt(an, a.dir) {
+		for ; !ok || g.Wall; g, ok = a.GridAt(an, a.dir) {
 			//fmt.Printf("SPIN\n")
 			a.dir = a.dir.Right(1)
 			i++

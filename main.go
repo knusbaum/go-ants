@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	WIDTH  = 1000
+	WIDTH  = 1500
 	HEIGHT = 1000
 )
 
