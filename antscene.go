@@ -20,11 +20,11 @@ type gridspot struct {
 }
 
 const antTexSize = 3
-const foodCount = 10
-const pheromoneMax = 3000
-const marker = 2000
-const fadeDivisor = 500 // bigger number, slower pheromone fade.
-const pheromoneExtend = 10
+const foodCount = 20
+const pheromoneMax = 6000
+const marker = 3000
+const fadeDivisor = 600 // bigger number, slower pheromone fade.
+const pheromoneExtend = 0
 
 type AntScene struct {
 	ants               []Ant
@@ -219,6 +219,7 @@ func (as *AntScene) Init(g *Game[GameState], r *sdl.Renderer, s *GameState) erro
 	as.renderRed = true
 	as.propPher = false
 	as.pause = true
+	as.parallel = true
 	as.pherOverloadFactor = 500
 	t, err := r.CreateTexture(uint32(sdl.PIXELFORMAT_RGBA8888), sdl.TEXTUREACCESS_STREAMING, WIDTH, HEIGHT)
 	if err != nil {

@@ -213,10 +213,10 @@ func (a *Ant) SumOctant(an *AntScene, d direction, size int) gridspot {
 		for y := start.y; y < end.y; y++ {
 			p := point{x, y}
 			if p.Within(0, 0, WIDTH, HEIGHT) && !an.grid[x][y].Wall {
-				pt.FoodPher += an.grid[x][y].FoodPher + an.grid[x][y].Food*100000 // - (an.grid[x][y].homePher / 4)
-				pt.HomePher += an.grid[x][y].HomePher                             // - (an.grid[x][y].foodPher / 4)
+				pt.FoodPher += an.grid[x][y].FoodPher + an.grid[x][y].Food*1000000 // - (an.grid[x][y].homePher / 4)
+				pt.HomePher += an.grid[x][y].HomePher                              // - (an.grid[x][y].foodPher / 4)
 				if an.grid[x][y].Home {
-					pt.HomePher += 100000
+					pt.HomePher += 1000000
 				}
 			}
 		}
