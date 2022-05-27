@@ -2,6 +2,8 @@ package main
 
 import (
 	"log"
+	"os"
+	"runtime/pprof"
 
 	"github.com/hajimehoshi/ebiten/v2"
 )
@@ -12,6 +14,16 @@ const (
 )
 
 func main() {
+
+	f, err := os.Create("cpu.pprof")
+	if err != nil {
+		log.Fatal("could not create CPU profile: ", err)
+	}
+	defer f.Close() // error handling omitted for example
+	if err := pprof.StartCPUProfile(f); err != nil {
+		log.Fatal("could not start CPU profile: ", err)
+	}
+	defer pprof.StopCPUProfile()
 
 	game := &EGame{}
 	game.ants = make([]Ant, 1000)

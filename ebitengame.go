@@ -3,8 +3,7 @@ package main
 import (
 	"encoding/gob"
 	"fmt"
-	"image"
-	"image/color"
+	"math/rand"
 	"os"
 	"reflect"
 	"sync"
@@ -90,11 +89,11 @@ func (as *EGame) LoadGrid() error {
 }
 
 func (as *EGame) Init() error {
-	as.renderPher = true
+	as.renderPher = false
 	as.renderGreen = true
 	as.renderRed = true
 	as.propPher = false
-	as.pause = false
+	as.pause = true
 	as.parallel = true
 	as.pherOverloadFactor = 500
 	ebiten.SetMaxTPS(100)
@@ -102,6 +101,10 @@ func (as *EGame) Init() error {
 		for y := 0; y < 100; y++ {
 			as.grid[x][y].Home = true
 		}
+	}
+
+	for a := range as.ants {
+		as.ants[a].dir = as.ants[a].dir.Left(rand.Intn(9))
 	}
 
 	// Experimental
@@ -255,6 +258,9 @@ func (as *EGame) HandleInput() error {
 		}
 	} else if inpututil.IsKeyJustPressed(ebiten.KeyA) {
 		as.ants = make([]Ant, len(as.ants))
+		for a := range as.ants {
+			as.ants[a].dir = as.ants[a].dir.Left(rand.Intn(9))
+		}
 	} else if inpututil.IsKeyJustPressed(ebiten.KeyC) {
 		as.grid = [WIDTH][HEIGHT]gridspot{}
 		for x := 0; x < 100; x++ {
@@ -263,6 +269,9 @@ func (as *EGame) HandleInput() error {
 			}
 		}
 		as.ants = make([]Ant, len(as.ants))
+		for a := range as.ants {
+			as.ants[a].dir = as.ants[a].dir.Left(rand.Intn(9))
+		}
 	} else if inpututil.IsKeyJustPressed(ebiten.KeyO) {
 		as.pherOverload = !as.pherOverload
 		fmt.Printf("Pheromone Overloading Enabled: %t, Factor: %v\n", as.pherOverload, as.pherOverloadFactor)
@@ -446,10 +455,10 @@ func (as *EGame) ParallelUpdate() error {
 		if end > len(as.ants) {
 			end = len(as.ants)
 		}
-		//fmt.Printf("%d -> %d\n", a, end)
+		wg.Add(1)
 		as.antWorkChan <- gridwork{start: a, end: end, wg: &wg}
 		a = end
-		wg.Add(1)
+
 	}
 	wg.Wait()
 	//fmt.Printf("DONE\n")
@@ -460,10 +469,10 @@ func (as *EGame) ParallelUpdate() error {
 		if end > len(as.grid) {
 			end = len(as.grid)
 		}
-		//fmt.Printf("%d -> %d\n", x, end)
+		wg.Add(1)
 		as.gridWorkChan <- gridwork{start: x, end: end, wg: &wg}
 		x = end
-		wg.Add(1)
+
 	}
 	wg.Wait()
 	return nil
@@ -514,8 +523,19 @@ func (as *EGame) Draw(screen *ebiten.Image) {
 			}
 		}
 	}
-	//as.sceneTex.Unlock()
-	//r.Copy(as.sceneTex, nil, nil)
+	for a := range as.ants {
+		for x := as.ants[a].pos.x - (antTexSize / 2); x < as.ants[a].pos.x+(antTexSize/2); x++ {
+			if x < 0 || x >= WIDTH {
+				continue
+			}
+			for y := as.ants[a].pos.y - (antTexSize / 2); y < as.ants[a].pos.y+(antTexSize/2); y++ {
+				if y < 0 || y >= HEIGHT {
+					continue
+				}
+				bs[x+y*WIDTH] = 0xFFFFFFFF
+			}
+		}
+	}
 
 	var bbs []byte
 	sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&bbs))
@@ -523,14 +543,6 @@ func (as *EGame) Draw(screen *ebiten.Image) {
 	sliceHeader.Len = int(len(bs) * 4)
 	sliceHeader.Data = uintptr(unsafe.Pointer(&bs[0]))
 	screen.ReplacePixels(bbs)
-
-	for a := range as.ants {
-		i := screen.SubImage(image.Rectangle{
-			image.Point{as.ants[a].pos.x - (antTexSize / 2), as.ants[a].pos.y - (antTexSize / 2)},
-			image.Point{as.ants[a].pos.x + (antTexSize / 2), as.ants[a].pos.y + (antTexSize / 2)},
-		})
-		i.(*ebiten.Image).Fill(color.RGBA{0xff, 0xff, 0xff, 0xff})
-	}
 
 	return
 }
@@ -545,25 +557,31 @@ func (as *EGame) ParallelRender(screen *ebiten.Image) {
 			end = len(as.grid[0])
 		}
 		//fmt.Printf("%d -> %d\n", a, end)
+		wg.Add(1)
 		as.renderWorkChan <- renderwork{start: a, end: end, wg: &wg, bs: bs}
 		a = end
-		wg.Add(1)
+
 	}
 	wg.Wait()
+	for a := range as.ants {
+		for x := as.ants[a].pos.x - (antTexSize / 2); x < as.ants[a].pos.x+(antTexSize/2); x++ {
+			if x < 0 || x >= WIDTH {
+				continue
+			}
+			for y := as.ants[a].pos.y - (antTexSize / 2); y < as.ants[a].pos.y+(antTexSize/2); y++ {
+				if y < 0 || y >= HEIGHT {
+					continue
+				}
+				bs[x+y*WIDTH] = 0xFFFFFFFF
+			}
+		}
+	}
 	var bbs []byte
 	sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&bbs))
 	sliceHeader.Cap = int(len(bs) * 4)
 	sliceHeader.Len = int(len(bs) * 4)
 	sliceHeader.Data = uintptr(unsafe.Pointer(&bs[0]))
 	screen.ReplacePixels(bbs)
-
-	for a := range as.ants {
-		i := screen.SubImage(image.Rectangle{
-			image.Point{as.ants[a].pos.x - (antTexSize / 2), as.ants[a].pos.y - (antTexSize / 2)},
-			image.Point{as.ants[a].pos.x + (antTexSize / 2), as.ants[a].pos.y + (antTexSize / 2)},
-		})
-		i.(*ebiten.Image).Fill(color.RGBA{0xff, 0xff, 0xff, 0xff})
-	}
 	return
 }
 
