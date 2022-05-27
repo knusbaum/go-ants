@@ -2,8 +2,6 @@ package main
 
 import (
 	"math/rand"
-
-	"github.com/veandco/go-sdl2/sdl"
 )
 
 type direction int
@@ -109,56 +107,6 @@ func (d direction) Right(n int) direction {
 		d += END
 	}
 	return d
-}
-
-func (a *Ant) OctantRect(d direction, size int) sdl.Rect {
-	var (
-		start point
-		end   point
-	)
-	switch d {
-	case N:
-		start.x = a.pos.x - (size / 2)
-		start.y = a.pos.y - size
-		end.x = a.pos.x + (size / 2)
-		end.y = a.pos.y
-	case NE:
-		start.x = a.pos.x
-		start.y = a.pos.y - size
-		end.x = a.pos.x + size
-		end.y = a.pos.y
-	case E:
-		start.x = a.pos.x
-		start.y = a.pos.y - (size / 2)
-		end.x = a.pos.x + size
-		end.y = a.pos.y + (size / 2)
-	case SE:
-		start.x = a.pos.x
-		start.y = a.pos.y
-		end.x = a.pos.x + size
-		end.y = a.pos.y + size
-	case S:
-		start.x = a.pos.x - (size / 2)
-		start.y = a.pos.y
-		end.x = a.pos.x + (size / 2)
-		end.y = a.pos.y + size
-	case SW:
-		start.x = a.pos.x - size
-		start.y = a.pos.y
-		end.x = a.pos.x
-		end.y = a.pos.y + size
-	case W:
-		start.x = a.pos.x - size
-		start.y = a.pos.y - (size / 2)
-		end.x = a.pos.x
-		end.y = a.pos.y + (size / 2)
-	case NW:
-		start.x = a.pos.x - size
-		start.y = a.pos.y - size
-		end.x = a.pos.x
-		end.y = a.pos.y
-	}
-	return sdl.Rect{int32(start.x), int32(start.y), int32(end.x - start.x), int32(end.y - start.y)}
 }
 
 func (a *Ant) SumOctant(an *EGame, d direction, size int) gridspot {
