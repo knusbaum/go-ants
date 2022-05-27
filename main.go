@@ -3,11 +3,9 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
-	"runtime/pprof"
 
+	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/veandco/go-sdl2/sdl"
-	"github.com/veandco/go-sdl2/ttf"
 )
 
 const (
@@ -63,40 +61,51 @@ func (s *LineScene) RenderBelow() bool {
 func (s *LineScene) Destroy() {}
 
 func main() {
-	if err := sdl.Init(sdl.INIT_EVERYTHING); err != nil {
-		panic(err)
-	}
-	defer sdl.Quit()
-	fmt.Printf("INITED\n")
-
-	if err := ttf.Init(); err != nil {
-		panic(err)
-	}
-	defer ttf.Quit()
-
-	g, err := NewGame[GameState](WIDTH, HEIGHT)
-	if err != nil {
-		log.Fatalf("Failed to create new game: %v", err)
-	}
-	defer g.Destroy()
-	//g.PushScene(&LineScene{0, 0, 100, 100})
-	ants := make([]Ant, 1000)
-	// 	for i := 0; i < 1000; i++ {
-	// 		ants[i] = Ant{pos: point{x: rand.Intn(WIDTH), y: rand.Intn(HEIGHT)}, food: 0} //rand.Intn(2)}
+	// 	if err := sdl.Init(sdl.INIT_EVERYTHING); err != nil {
+	// 		panic(err)
 	// 	}
-	g.PushScene(&AntScene{ants: ants})
+	// 	defer sdl.Quit()
+	// 	fmt.Printf("INITED\n")
+	//
+	// 	if err := ttf.Init(); err != nil {
+	// 		panic(err)
+	// 	}
+	// 	defer ttf.Quit()
+	//
+	// 	g, err := NewGame[GameState](WIDTH, HEIGHT)
+	// 	if err != nil {
+	// 		log.Fatalf("Failed to create new game: %v", err)
+	// 	}
+	// 	defer g.Destroy()
+	// 	//g.PushScene(&LineScene{0, 0, 100, 100})
+	// 	ants := make([]Ant, 1000)
+	// 	// 	for i := 0; i < 1000; i++ {
+	// 	// 		ants[i] = Ant{pos: point{x: rand.Intn(WIDTH), y: rand.Intn(HEIGHT)}, food: 0} //rand.Intn(2)}
+	// 	// 	}
+	// 	g.PushScene(&AntScene{ants: ants})
+	//
+	// 	f, err := os.Create("ants.cpu")
+	// 	if err != nil {
+	// 		log.Fatal("could not create CPU profile: ", err)
+	// 	}
+	// 	defer f.Close() // error handling omitted for example
+	// 	if err := pprof.StartCPUProfile(f); err != nil {
+	// 		log.Fatal("could not start CPU profile: ", err)
+	// 	}
+	// 	defer pprof.StopCPUProfile()
+	//
+	// 	err = g.Run()
+	// 	fmt.Printf("Finished: %v\n", err)
 
-	f, err := os.Create("ants.cpu")
-	if err != nil {
-		log.Fatal("could not create CPU profile: ", err)
+	game := &EGame{}
+	game.ants = make([]Ant, 1000)
+	game.Init()
+	// Specify the window size as you like. Here, a doubled size is specified.
+	ebiten.SetWindowSize(WIDTH, HEIGHT)
+	ebiten.SetWindowTitle("Your game's title")
+	// Call ebiten.RunGame to start your game loop.
+	if err := ebiten.RunGame(game); err != nil {
+		log.Fatal(err)
 	}
-	defer f.Close() // error handling omitted for example
-	if err := pprof.StartCPUProfile(f); err != nil {
-		log.Fatal("could not start CPU profile: ", err)
-	}
-	defer pprof.StopCPUProfile()
-
-	err = g.Run()
-	fmt.Printf("Finished: %v\n", err)
 
 }

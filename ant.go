@@ -85,7 +85,7 @@ type Ant struct {
 	marker int
 }
 
-func (a *Ant) GridAt(an *AntScene, d direction) (gridspot, bool) {
+func (a *Ant) GridAt(an *EGame, d direction) (gridspot, bool) {
 	np := a.pos.PointAt(d)
 	if np.Within(0, 0, WIDTH, HEIGHT) {
 		return an.grid[np.x][np.y], true
@@ -161,7 +161,7 @@ func (a *Ant) OctantRect(d direction, size int) sdl.Rect {
 	return sdl.Rect{int32(start.x), int32(start.y), int32(end.x - start.x), int32(end.y - start.y)}
 }
 
-func (a *Ant) SumOctant(an *AntScene, d direction, size int) gridspot {
+func (a *Ant) SumOctant(an *EGame, d direction, size int) gridspot {
 	var (
 		start point
 		end   point
@@ -232,7 +232,7 @@ func (a *Ant) SumOctant(an *AntScene, d direction, size int) gridspot {
 	return pt
 }
 
-func (a *Ant) Move(an *AntScene) {
+func (a *Ant) Move(an *EGame) {
 	if n := rand.Intn(10); n == 0 {
 		straight := a.SumOctant(an, a.dir, 50)
 		left := a.SumOctant(an, a.dir.Left(1), 50)
