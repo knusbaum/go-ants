@@ -160,12 +160,22 @@ func (a *Ant) SumOctant(an *EGame, d direction, size int) gridspot {
 	for x := start.x; x < end.x; x++ {
 		for y := start.y; y < end.y; y++ {
 			p := point{x, y}
-			if p.Within(0, 0, WIDTH, HEIGHT) && !an.grid[x][y].Wall {
-				pt.FoodPher += an.grid[x][y].FoodPher + an.grid[x][y].Food*1000000 // - (an.grid[x][y].homePher / 4)
-				pt.HomePher += an.grid[x][y].HomePher                              // - (an.grid[x][y].foodPher / 4)
-				if an.grid[x][y].Home {
-					pt.HomePher += 1000000
-				}
+			if p.Within(0, 0, WIDTH, HEIGHT) {
+				pt.FoodPher += an.grid[x][y].FoodPher //+ an.grid[x][y].Food*1000000 // - (an.grid[x][y].homePher / 4)
+				pt.HomePher += an.grid[x][y].HomePher // - (an.grid[x][y].foodPher / 4)
+				// 				if an.grid[x][y].Home {
+				// 					pt.HomePher += 1000000
+				// 				}
+				// 				if an.grid[x][y].Wall {
+				// 					if pt.FoodPher > 500 {
+				// 						pt.FoodPher -= 500
+				// 					}
+				// 					if pt.HomePher > 500 {
+				// 						pt.HomePher -= 500
+				// 					}
+				// 				}
+				// 				pt.FoodPher -= an.grid[x][y].HomePher / pheromoneMax
+				// 				pt.HomePher -= an.grid[x][y].FoodPher / pheromoneMax
 			}
 		}
 	}
@@ -177,35 +187,92 @@ func (a *Ant) SumOctant(an *EGame, d direction, size int) gridspot {
 			pt.HomePher = pheromoneMax * an.pherOverloadFactor
 		}
 	}
+	for x := start.x; x < end.x; x++ {
+		for y := start.y; y < end.y; y++ {
+			p := point{x, y}
+			if p.Within(0, 0, WIDTH, HEIGHT) {
+				if an.grid[x][y].Wall {
+					if pt.FoodPher > 5000 {
+						pt.FoodPher -= 5000
+					}
+					if pt.HomePher > 5000 {
+						pt.HomePher -= 5000
+					}
+				}
+				if an.grid[x][y].Food > 0 {
+					pt.FoodPher += pheromoneMax * 50 * 50
+				}
+				if an.grid[x][y].Home {
+					pt.HomePher += pheromoneMax * 50 * 50
+				}
+			}
+		}
+	}
+
 	return pt
 }
 
 func (a *Ant) Move(an *EGame) {
-	if n := rand.Intn(10); n == 0 {
+	if n := rand.Intn(5); n == 0 {
 		straight := a.SumOctant(an, a.dir, 50)
 		left := a.SumOctant(an, a.dir.Left(1), 50)
 		right := a.SumOctant(an, a.dir.Right(1), 50)
+		//bias := 0
+
+		r := func(n int) {
+			n = rand.Intn(n)
+			if n == 0 {
+				a.dir = a.dir.Left(1)
+			} else if n == 1 {
+				a.dir = a.dir.Right(1)
+			}
+		}
 
 		if a.food > 0 {
+			//bias = straight.HomePher
 			if right.HomePher > straight.HomePher && right.HomePher > left.HomePher {
+				//bias = right.HomePher - straight.HomePher
+				//if v := rand.Intn(right.HomePher); v < bias {
 				a.dir = a.dir.Right(1)
+				//}
+				//bias = right.HomePher
+				//a.dir = a.dir.Right(1)
+				//r(5)
 			} else if left.HomePher > straight.HomePher && left.HomePher > right.HomePher {
+				//bias = left.HomePher - straight.HomePher
+				//if v := rand.Intn(left.HomePher); v < bias {
 				a.dir = a.dir.Left(1)
+				//}
+				//bias = left.HomePher
+				//a.dir = a.dir.Left(1)
+				//r(5)
 			}
+			// else if straight.HomePher > right.HomePher && straight.HomePher > left.HomePher {
+			// 				r(5)
+			// 			}
 		} else {
+			//bias = straight.FoodPher
 			if right.FoodPher > straight.FoodPher && right.FoodPher > left.FoodPher {
+				//	bias = right.FoodPher - straight.FoodPher
+				//if v := rand.Intn(right.FoodPher); v < bias {
 				a.dir = a.dir.Right(1)
+				//}
+				//a.dir = a.dir.Right(1)
+				//r(5)
 			} else if left.FoodPher > straight.FoodPher && left.FoodPher > right.FoodPher {
+				//bias = left.FoodPher - straight.FoodPher
+				//if v := rand.Intn(left.FoodPher); v < bias {
 				a.dir = a.dir.Left(1)
+				//}
+				//bias = left.FoodPher
+				//a.dir = a.dir.Left(1)
+				//r(5)
 			}
+			// else if straight.FoodPher > right.FoodPher && straight.FoodPher > left.FoodPher {
+			// 				r(5)
+			// 			}
 		}
-
-		n := rand.Intn(10)
-		if n == 0 {
-			a.dir = a.dir.Left(1)
-		} else if n == 1 {
-			a.dir = a.dir.Right(1)
-		}
+		r(10)
 	}
 
 	if g, ok := a.GridAt(an, a.dir); !ok || g.Wall {

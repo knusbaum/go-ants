@@ -6,7 +6,9 @@ import (
 	"math/rand"
 	"os"
 	"reflect"
+	"runtime"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -16,8 +18,8 @@ import (
 const antTexSize = 3
 const foodCount = 20
 const pheromoneMax = 6000
-const marker = 3000
-const fadeDivisor = 600 // bigger number, slower pheromone fade.
+const marker = 6000
+const fadeDivisor = 800 // bigger number, slower pheromone fade.
 const pheromoneExtend = 0
 
 type gridspot struct {
@@ -45,6 +47,8 @@ type EGame struct {
 	gridWorkChan       chan gridwork
 	antWorkChan        chan gridwork
 	renderWorkChan     chan renderwork
+	newAnts            <-chan time.Time
+	food               int64
 }
 
 type gridwork struct {
@@ -95,7 +99,9 @@ func (as *EGame) Init() error {
 	as.propPher = false
 	as.pause = true
 	as.parallel = true
-	as.pherOverloadFactor = 500
+	as.pherOverload = false
+	as.pherOverloadFactor = 1500
+	as.food = int64(len(as.ants)) * 80
 	ebiten.SetMaxTPS(100)
 	for x := 0; x < 100; x++ {
 		for y := 0; y < 100; y++ {
@@ -108,81 +114,39 @@ func (as *EGame) Init() error {
 	}
 
 	// Experimental
+
+	as.newAnts = time.Tick(time.Second)
+
 	as.gridWorkChan = make(chan gridwork, 10)
-	for i := 0; i < 16; i++ {
+	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
 		go func() {
 			for {
 				gw, ok := <-as.gridWorkChan
 				if !ok {
 					return
 				}
-				for x := gw.start; x < gw.end; x++ {
-					for y := range as.grid[x] {
-						if as.grid[x][y].FoodPher > 0 {
-							as.grid[x][y].FoodPher -= (as.grid[x][y].FoodPher / fadeDivisor) + 1
-						}
-						if as.grid[x][y].HomePher > 0 {
-							as.grid[x][y].HomePher -= (as.grid[x][y].HomePher / fadeDivisor) + 1
-						}
-					}
-				}
+				as.updateGrid(gw.start, gw.end)
 				gw.wg.Done()
 			}
 		}()
 	}
 
 	as.antWorkChan = make(chan gridwork, 10)
-	for i := 0; i < 16; i++ {
+	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
 		go func() {
 			for {
 				gw, ok := <-as.antWorkChan
 				if !ok {
 					return
 				}
-				//fmt.Printf("GW.start: %d, gw.end: %d\n", gw.start, gw.end)
-				for a := gw.start; a < gw.end; a++ {
-					//fmt.Printf("Moving ant %d\n")
-					as.ants[a].Move(as)
-					if as.grid[as.ants[a].pos.x][as.ants[a].pos.y].Home {
-						as.ants[a].food = 0
-						as.ants[a].marker = marker
-					}
-					if as.grid[as.ants[a].pos.x][as.ants[a].pos.y].Food > 0 {
-						if as.ants[a].food == 0 {
-							as.ants[a].dir = as.ants[a].dir.Right(4)
-							as.grid[as.ants[a].pos.x][as.ants[a].pos.y].Food -= 10
-							as.ants[a].food = 10
-						}
-						as.ants[a].marker = marker
-					}
-
-					if as.ants[a].food > 0 {
-						if as.grid[as.ants[a].pos.x][as.ants[a].pos.y].FoodPher < pheromoneMax {
-							as.grid[as.ants[a].pos.x][as.ants[a].pos.y].FoodPher += as.ants[a].marker
-							if as.ants[a].marker > 0 {
-								as.ants[a].marker -= 1
-							}
-						} else if as.ants[a].marker > pheromoneExtend {
-							as.ants[a].marker -= 1
-						}
-					} else {
-						if as.grid[as.ants[a].pos.x][as.ants[a].pos.y].HomePher < pheromoneMax {
-							as.grid[as.ants[a].pos.x][as.ants[a].pos.y].HomePher += as.ants[a].marker
-							if as.ants[a].marker > 0 {
-								as.ants[a].marker -= 1
-							}
-						} else if as.ants[a].marker > pheromoneExtend {
-							as.ants[a].marker -= 1
-						}
-					}
-				}
+				as.updateAnts(gw.start, gw.end)
 				gw.wg.Done()
 			}
 		}()
 	}
 
 	as.renderWorkChan = make(chan renderwork, 10)
-	for i := 0; i < 16; i++ {
+	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
 		go func() {
 			for {
 				rw, ok := <-as.renderWorkChan
@@ -190,49 +154,113 @@ func (as *EGame) Init() error {
 					return
 				}
 				//fmt.Printf("GW.start: %d, gw.end: %d\n", gw.start, gw.end)
-				divisor := pheromoneMax / 255
-				for y := rw.start; y < rw.end; y++ {
-					for x := range as.grid {
-						if as.grid[x][y].Wall {
-							rw.bs[x+y*WIDTH] = 0xFF333333 //0x333333FF
-							continue
-						} else if as.grid[x][y].Food > 0 {
-							rw.bs[x+y*WIDTH] = 0xFF33FF33 //0x33FF33FF
-							continue
-						} else if as.grid[x][y].Home {
-							rw.bs[x+y*WIDTH] = 0xFF3333FF //0xFF3333FF
-							continue
-						}
-						if as.renderPher {
-							var (
-								vg uint32
-								vr uint32
-							)
-							if as.renderGreen {
-								vg = uint32(as.grid[x][y].FoodPher / divisor) //uint32((float32(as.grid[x][y].foodPher) / 500.0) * 255.0)
-								if vg > 255 {
-									vg = 255
-								}
-								vg = vg << 8
-							}
-							if as.renderRed {
-								vr = uint32(as.grid[x][y].HomePher / divisor) //uint32((float32(as.grid[x][y].homePher) / 500.0) * 255.0)
-								if vr > 255 {
-									vr = 255
-								}
-							}
-							rw.bs[x+y*WIDTH] = 0xFF000000 | vg | vr
-						} else {
-							rw.bs[x+y*WIDTH] = 0xFF000000
-						}
-					}
-				}
+				as.renderPartial(rw.start, rw.end, rw.bs)
 				rw.wg.Done()
 			}
 		}()
 	}
 
 	return nil
+}
+
+func (as *EGame) updateGrid(start, end int) {
+	for x := start; x < end; x++ {
+		for y := range as.grid[x] {
+			if as.grid[x][y].FoodPher > 0 {
+				as.grid[x][y].FoodPher -= (as.grid[x][y].FoodPher / fadeDivisor) + 1
+			}
+			if as.grid[x][y].HomePher > 0 {
+				as.grid[x][y].HomePher -= (as.grid[x][y].HomePher / fadeDivisor) + 1
+			}
+		}
+	}
+}
+
+func (as *EGame) updateAnts(start, end int) {
+	for a := start; a < end; a++ {
+		//fmt.Printf("Moving ant %d\n")
+		as.ants[a].Move(as)
+		if as.grid[as.ants[a].pos.x][as.ants[a].pos.y].Home {
+			as.food += int64(as.ants[a].food)
+			as.ants[a].food = 0
+			as.ants[a].marker = marker
+		}
+		if as.grid[as.ants[a].pos.x][as.ants[a].pos.y].Food > 0 {
+			if as.ants[a].food == 0 {
+				as.ants[a].dir = as.ants[a].dir.Right(4)
+				as.grid[as.ants[a].pos.x][as.ants[a].pos.y].Food -= 10
+				as.ants[a].food = 10
+			}
+			as.ants[a].marker = marker
+		}
+
+		if as.ants[a].food > 0 {
+			if as.grid[as.ants[a].pos.x][as.ants[a].pos.y].FoodPher < pheromoneMax {
+				as.grid[as.ants[a].pos.x][as.ants[a].pos.y].FoodPher += as.ants[a].marker
+				if as.grid[as.ants[a].pos.x][as.ants[a].pos.y].FoodPher > pheromoneMax {
+					as.grid[as.ants[a].pos.x][as.ants[a].pos.y].FoodPher = pheromoneMax
+				}
+
+				if as.ants[a].marker > 0 {
+					as.ants[a].marker -= 2
+				}
+			} else if as.ants[a].marker > pheromoneExtend {
+				as.ants[a].marker -= 2
+			}
+		} else {
+			if as.grid[as.ants[a].pos.x][as.ants[a].pos.y].HomePher < pheromoneMax {
+				as.grid[as.ants[a].pos.x][as.ants[a].pos.y].HomePher += as.ants[a].marker
+				if as.grid[as.ants[a].pos.x][as.ants[a].pos.y].HomePher > pheromoneMax {
+					as.grid[as.ants[a].pos.x][as.ants[a].pos.y].HomePher = pheromoneMax
+				}
+				if as.ants[a].marker > 0 {
+					as.ants[a].marker -= 2
+				}
+			} else if as.ants[a].marker > pheromoneExtend {
+				as.ants[a].marker -= 2
+			}
+		}
+	}
+}
+
+func (as *EGame) renderPartial(start, end int, bs []uint32) {
+	divisor := pheromoneMax / 255
+	for y := start; y < end; y++ {
+		for x := range as.grid {
+			if as.grid[x][y].Wall {
+				bs[x+y*WIDTH] = 0xFF333333 //0x333333FF
+				continue
+			} else if as.grid[x][y].Food > 0 {
+				bs[x+y*WIDTH] = 0xFF33FF33 //0x33FF33FF
+				continue
+			} else if as.grid[x][y].Home {
+				bs[x+y*WIDTH] = 0xFF3333FF //0xFF3333FF
+				continue
+			}
+			if as.renderPher {
+				var (
+					vg uint32
+					vr uint32
+				)
+				if as.renderGreen {
+					vg = uint32(as.grid[x][y].FoodPher / divisor) //uint32((float32(as.grid[x][y].foodPher) / 500.0) * 255.0)
+					if vg > 255 {
+						vg = 255
+					}
+					vg = vg << 8
+				}
+				if as.renderRed {
+					vr = uint32(as.grid[x][y].HomePher / divisor) //uint32((float32(as.grid[x][y].homePher) / 500.0) * 255.0)
+					if vr > 255 {
+						vr = 255
+					}
+				}
+				bs[x+y*WIDTH] = 0xFF000000 | vg | vr
+			} else {
+				bs[x+y*WIDTH] = 0xFF000000
+			}
+		}
+	}
 }
 
 func (as *EGame) HandleInput() error {
@@ -278,6 +306,12 @@ func (as *EGame) HandleInput() error {
 	} else if inpututil.IsKeyJustPressed(ebiten.KeyX) {
 		as.parallel = !as.parallel
 		fmt.Printf("Parallel update: %t\n", as.parallel)
+	} else if inpututil.IsKeyJustPressed(ebiten.KeyDown) {
+		as.pherOverloadFactor -= 100
+		fmt.Printf("Pheromone Overloading Enabled: %t, Factor: %v\n", as.pherOverload, as.pherOverloadFactor)
+	} else if inpututil.IsKeyJustPressed(ebiten.KeyUp) {
+		as.pherOverloadFactor += 100
+		fmt.Printf("Pheromone Overloading Enabled: %t, Factor: %v\n", as.pherOverload, as.pherOverloadFactor)
 	}
 
 	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
@@ -347,103 +381,31 @@ func (as *EGame) Update() error {
 	if as.pause {
 		return nil
 	}
+	// 	select {
+	// 	case <-as.newAnts:
+	// 		l := int64(len(as.ants))
+	// 		if as.food > 0 {
+	// 			as.food -= l / 10
+	// 		}
+	// 		min := l * 40
+	// 		ratio := as.food / min
+	// 		if ratio >= 1 {
+	// 			bs := make([]Ant, ratio)
+	// 			as.ants = append(as.ants, bs...)
+	// 		} else if ratio < 1 {
+	// 			keep := (len(as.ants) * int(as.food)) / int(min)
+	// 			delete := len(as.ants) - keep
+	// 			as.ants = as.ants[:len(as.ants)-delete]
+	// 		}
+	// 		fmt.Printf("Food: %d, Ants: %d, Ratio: %d, keep: (%d)\n", as.food, len(as.ants), ratio, (len(as.ants)*int(as.food))/int(min))
+	//
+	// 	default:
+	// 	}
 	if as.parallel {
 		return as.ParallelUpdate()
 	}
-	for a := range as.ants {
-		as.ants[a].Move(as)
-		if as.grid[as.ants[a].pos.x][as.ants[a].pos.y].Home {
-			as.ants[a].food = 0
-			as.ants[a].marker = marker
-		}
-		if as.grid[as.ants[a].pos.x][as.ants[a].pos.y].Food > 0 {
-			if as.ants[a].food == 0 {
-				as.ants[a].dir = as.ants[a].dir.Right(4)
-				as.grid[as.ants[a].pos.x][as.ants[a].pos.y].Food -= 10
-				as.ants[a].food = 10
-			}
-			as.ants[a].marker = marker
-		}
-
-		if as.ants[a].food > 0 {
-			if as.grid[as.ants[a].pos.x][as.ants[a].pos.y].FoodPher < pheromoneMax {
-				as.grid[as.ants[a].pos.x][as.ants[a].pos.y].FoodPher += as.ants[a].marker
-				if as.ants[a].marker > 0 {
-					as.ants[a].marker -= 1
-				}
-			} else if as.ants[a].marker > pheromoneExtend {
-				as.ants[a].marker -= 1
-			}
-		} else {
-			if as.grid[as.ants[a].pos.x][as.ants[a].pos.y].HomePher < pheromoneMax {
-				as.grid[as.ants[a].pos.x][as.ants[a].pos.y].HomePher += as.ants[a].marker
-				if as.ants[a].marker > 0 {
-					as.ants[a].marker -= 1
-				}
-			} else if as.ants[a].marker > pheromoneExtend {
-				as.ants[a].marker -= 1
-			}
-		}
-	}
-	for x := range as.grid {
-		for y := range as.grid[x] {
-			if as.grid[x][y].FoodPher > 0 {
-				as.grid[x][y].FoodPher -= (as.grid[x][y].FoodPher / fadeDivisor) + 1
-			}
-			if as.grid[x][y].HomePher > 0 {
-				as.grid[x][y].HomePher -= (as.grid[x][y].HomePher / fadeDivisor) + 1
-			}
-			if as.propPher {
-				hasFood := as.grid[x][y].FoodPher > marker
-				hasHome := as.grid[x][y].HomePher > marker
-				if hasFood || hasHome {
-					pt := point{x, y}
-					if pt.Within(1, 1, WIDTH-2, HEIGHT-2) {
-						if hasFood {
-							as.grid[x][y].FoodPher /= 2
-							for d := N; d < END; d++ {
-								pt2 := pt.PointAt(d)
-								if as.grid[pt2.x][pt2.y].FoodPher < pheromoneMax {
-									as.grid[pt2.x][pt2.y].FoodPher += (as.grid[x][y].FoodPher / 9)
-								}
-							}
-						}
-						if hasHome {
-							as.grid[x][y].HomePher /= 2
-							for d := N; d < END; d++ {
-								pt2 := pt.PointAt(d)
-								if as.grid[pt2.x][pt2.y].HomePher < pheromoneMax {
-									as.grid[pt2.x][pt2.y].HomePher += (as.grid[x][y].HomePher / 9)
-								}
-							}
-						}
-					}
-				}
-			} else if as.oldPropPher {
-				hasFood := as.grid[x][y].FoodPher > 100
-				hasHome := as.grid[x][y].HomePher > 100
-				if hasFood || hasHome {
-					pt := point{x, y}
-					if pt.Within(1, 1, WIDTH-2, HEIGHT-2) {
-						if hasFood {
-							for d := N; d < END; d++ {
-								pt2 := pt.PointAt(d)
-								as.grid[pt2.x][pt2.y].FoodPher += (as.grid[x][y].FoodPher / 9)
-							}
-							as.grid[x][y].FoodPher /= 9
-						}
-						if hasHome {
-							for d := N; d < END; d++ {
-								pt2 := pt.PointAt(d)
-								as.grid[pt2.x][pt2.y].HomePher += (as.grid[x][y].HomePher / 9)
-							}
-							as.grid[x][y].HomePher /= 9
-						}
-					}
-				}
-			}
-		}
-	}
+	as.updateAnts(0, len(as.ants))
+	as.updateGrid(0, WIDTH)
 	return nil
 }
 
