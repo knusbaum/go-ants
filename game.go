@@ -3,10 +3,13 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"sync/atomic"
 	"time"
 
 	"github.com/veandco/go-sdl2/sdl"
 )
+
+var frames uint32
 
 type Game[T any] struct {
 	window *sdl.Window
@@ -44,6 +47,16 @@ func (g *Game[T]) Destroy() {
 }
 
 func (g *Game[T]) Run() error {
+	running := int32(1)
+	defer func() { atomic.StoreInt32(&running, 0) }()
+	go func() {
+		// TODO: Shut this down on exit from run.
+		for atomic.LoadInt32(&running) > 0 {
+			time.Sleep(1 * time.Second)
+			frames := atomic.SwapUint32(&frames, 0)
+			fmt.Printf("fps: %d\n", frames)
+		}
+	}()
 	for {
 		// 		start := sdl.GetTicks64()
 		h, ok := g.scenes[len(g.scenes)-1].(EventHandler[T])
@@ -67,6 +80,7 @@ func (g *Game[T]) Run() error {
 		}
 		g.r.SetDrawColor(0x00, 0x00, 0x00, 0xFF)
 		g.r.Clear()
+		atomic.AddUint32(&frames, 1)
 		for _, scene := range g.render {
 			err := scene.Render(g, g.r, &g.state)
 			if err != nil {

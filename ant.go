@@ -88,7 +88,8 @@ type Ant struct {
 func (a *Ant) GridAt(an *AntScene, d direction) (gridspot, bool) {
 	np := a.pos.PointAt(d)
 	if np.Within(0, 0, WIDTH, HEIGHT) {
-		return an.grid[np.x][np.y], true
+		//return an.grid[np.x][np.y], true
+		return *an.field.Get(np.x, np.y), true
 	}
 	return gridspot{}, false
 }
@@ -212,11 +213,15 @@ func (a *Ant) SumOctant(an *AntScene, d direction, size int) gridspot {
 	for x := start.x; x < end.x; x++ {
 		for y := start.y; y < end.y; y++ {
 			p := point{x, y}
-			if p.Within(0, 0, WIDTH, HEIGHT) && !an.grid[x][y].Wall {
-				pt.FoodPher += an.grid[x][y].FoodPher + an.grid[x][y].Food*100000 // - (an.grid[x][y].homePher / 4)
-				pt.HomePher += an.grid[x][y].HomePher                             // - (an.grid[x][y].foodPher / 4)
-				if an.grid[x][y].Home {
-					pt.HomePher += 100000
+			//if p.Within(0, 0, WIDTH, HEIGHT) && !an.grid[x][y].Wall
+			if p.Within(0, 0, WIDTH, HEIGHT) {
+				spot := an.field.Get(x, y)
+				if !spot.Wall {
+					pt.FoodPher += spot.FoodPher + spot.Food*100000 // - (an.grid[x][y].homePher / 4)
+					pt.HomePher += spot.HomePher                    // - (an.grid[x][y].foodPher / 4)
+					if spot.Home {
+						pt.HomePher += 100000
+					}
 				}
 			}
 		}

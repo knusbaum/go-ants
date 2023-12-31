@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	WIDTH  = 1500
-	HEIGHT = 1000
+	WIDTH  = 1024
+	HEIGHT = 768
 )
 
 type GameState struct {
@@ -80,7 +80,7 @@ func main() {
 	}
 	defer g.Destroy()
 	//g.PushScene(&LineScene{0, 0, 100, 100})
-	ants := make([]Ant, 1000)
+	ants := make([]Ant, 3000)
 	// 	for i := 0; i < 1000; i++ {
 	// 		ants[i] = Ant{pos: point{x: rand.Intn(WIDTH), y: rand.Intn(HEIGHT)}, food: 0} //rand.Intn(2)}
 	// 	}
