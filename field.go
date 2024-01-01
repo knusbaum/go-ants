@@ -52,6 +52,12 @@ func (f *Field[T]) Update(x, y int) {
 	f.renderbuf[x+y*f.width] = f.valToColor(f.vals[x+y*f.width])
 }
 
+func (f *Field[T]) UpdateAll() {
+	for i := range f.vals {
+		f.renderbuf[i] = f.valToColor(f.vals[i])
+	}
+}
+
 func (f *Field[T]) Render(r *sdl.Renderer) error {
 	bsb, _, err := f.tex.Lock(nil)
 	if err != nil {

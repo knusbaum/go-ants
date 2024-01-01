@@ -71,7 +71,7 @@ func (as *AntScene) SaveGrid() error {
 	defer f.Close()
 
 	enc := gob.NewEncoder(f)
-	return enc.Encode(*as.field)
+	return enc.Encode(as.field.vals)
 }
 
 func (as *AntScene) LoadGrid() error {
@@ -82,12 +82,13 @@ func (as *AntScene) LoadGrid() error {
 	defer f.Close()
 
 	enc := gob.NewDecoder(f)
-	g := Field[gridspot]{} //[WIDTH][HEIGHT]gridspot{}
+	g := []gridspot{}
 	err = enc.Decode(&g)
 	if err != nil {
 		return err
 	}
-	as.field = &g
+	as.field.vals = g
+	as.field.UpdateAll()
 	return nil
 }
 

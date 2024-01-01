@@ -162,6 +162,94 @@ func (a *Ant) OctantRect(d direction, size int) sdl.Rect {
 	return sdl.Rect{int32(start.x), int32(start.y), int32(end.x - start.x), int32(end.y - start.y)}
 }
 
+func (a *Ant) Line(an *AntScene, d direction, size int) gridspot {
+	var pt gridspot
+	addspot := func(g *gridspot) bool {
+		if g.Wall {
+			return false
+		}
+		pt.FoodPher += g.FoodPher + g.Food*100000
+		pt.HomePher += g.HomePher
+		if g.Home {
+			pt.HomePher += 100000
+		}
+		return true
+	}
+	switch d {
+	case N:
+		for y := a.pos.y; y > a.pos.y-size && y > 0; y-- {
+			if !addspot(an.field.Get(a.pos.x, y)) {
+				break
+			}
+		}
+	case NE:
+		for i := 0; i < size; i++ {
+			y := a.pos.y - i
+			x := a.pos.x + i
+			if y < 0 || x >= an.field.height {
+				break
+			}
+			if !addspot(an.field.Get(x, y)) {
+				break
+			}
+		}
+	case E:
+		for x := a.pos.x; x < a.pos.x+size && x < an.field.height; x++ {
+			if !addspot(an.field.Get(x, a.pos.y)) {
+				break
+			}
+		}
+	case SE:
+		for i := 0; i < size; i++ {
+			y := a.pos.y + i
+			x := a.pos.x + i
+			if y >= an.field.height || x >= an.field.width {
+				break
+			}
+			if !addspot(an.field.Get(x, y)) {
+				break
+			}
+		}
+	case S:
+		for y := a.pos.y; y < a.pos.y+size && y < an.field.height; y++ {
+			if !addspot(an.field.Get(a.pos.x, y)) {
+				break
+			}
+		}
+	case SW:
+		for i := 0; i < size; i++ {
+			y := a.pos.y + i
+			x := a.pos.x - i
+			if y >= an.field.height || x < 0 {
+				break
+			}
+			if !addspot(an.field.Get(x, y)) {
+				break
+			}
+		}
+	case W:
+		for x := a.pos.x; x > a.pos.x-size && x > 0; x-- {
+			if !addspot(an.field.Get(x, a.pos.y)) {
+				break
+			}
+		}
+	case NW:
+		for i := 0; i < size; i++ {
+			y := a.pos.y - i
+			x := a.pos.x - i
+			if y < 0 || x < 0 {
+				break
+			}
+			if !addspot(an.field.Get(x, y)) {
+				break
+			}
+		}
+	default:
+		panic("NO SUCH DIRECTION")
+	}
+	return pt
+}
+
 func (a *Ant) SumOctant(an *AntScene, d direction, size int) gridspot {
 	var (
 		start point
@@ -210,16 +298,17 @@ func (a *Ant) SumOctant(an *AntScene, d direction, size int) gridspot {
 		end.y = a.pos.y
 	}
 	var pt gridspot
-	for x := start.x; x < end.x; x++ {
-		for y := start.y; y < end.y; y++ {
+	for y := start.y; y < end.y; y++ {
+		for x := start.x; x < end.x; x++ {
+
 			p := point{x, y}
 			//if p.Within(0, 0, WIDTH, HEIGHT) && !an.grid[x][y].Wall
 			if p.Within(0, 0, WIDTH, HEIGHT) {
-				spot := an.field.Get(x, y)
-				if !spot.Wall {
-					pt.FoodPher += spot.FoodPher + spot.Food*100000 // - (an.grid[x][y].homePher / 4)
-					pt.HomePher += spot.HomePher                    // - (an.grid[x][y].foodPher / 4)
-					if spot.Home {
+				//spot := an.field.Get(x, y)
+				if !an.field.vals[x+y*an.field.width].Wall {
+					pt.FoodPher += an.field.vals[x+y*an.field.width].FoodPher + an.field.vals[x+y*an.field.width].Food*100000 // - (an.grid[x][y].homePher / 4)
+					pt.HomePher += an.field.vals[x+y*an.field.width].HomePher                                                 // - (an.grid[x][y].foodPher / 4)
+					if an.field.vals[x+y*an.field.width].Home {
 						pt.HomePher += 100000
 					}
 				}
@@ -239,9 +328,23 @@ func (a *Ant) SumOctant(an *AntScene, d direction, size int) gridspot {
 
 func (a *Ant) Move(an *AntScene) {
 	if n := rand.Intn(10); n == 0 {
-		straight := a.SumOctant(an, a.dir, 50)
-		left := a.SumOctant(an, a.dir.Left(1), 50)
-		right := a.SumOctant(an, a.dir.Right(1), 50)
+		// straight := a.SumOctant(an, a.dir, 50)
+		// left := a.SumOctant(an, a.dir.Left(1), 50)
+		// right := a.SumOctant(an, a.dir.Right(1), 50)
+
+		straight := a.Line(an, a.dir, 50)
+		left := a.Line(an, a.dir.Left(1), 50)
+		lleft := a.Line(an, a.dir.Left(2), 50)
+		right := a.Line(an, a.dir.Right(1), 50)
+		rright := a.Line(an, a.dir.Right(2), 50)
+
+		// Directions include weighted values of their left and right directions
+		straight.FoodPher += left.FoodPher/2 + right.FoodPher/2
+		straight.HomePher += left.HomePher/2 + right.HomePher/2
+		left.FoodPher += lleft.FoodPher/2 + straight.FoodPher/2
+		left.HomePher += lleft.HomePher/2 + straight.HomePher/2
+		right.FoodPher += rright.FoodPher/2 + straight.FoodPher/2
+		right.HomePher += rright.HomePher/2 + straight.HomePher/2
 
 		if a.food > 0 {
 			if right.HomePher > straight.HomePher && right.HomePher > left.HomePher {
