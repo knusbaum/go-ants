@@ -20,11 +20,11 @@ type gridspot struct {
 }
 
 const antTexSize = 3
-const foodCount = 10
-const pheromoneMax = 3000
-const marker = 2000
+const foodCount = 100
+const pheromoneMax = 10000
+const marker = 20000
 const fadeDivisor = 500 // bigger number, slower pheromone fade.
-const pheromoneExtend = 10
+const pheromoneExtend = 100
 
 type AntScene struct {
 	ants []Ant
@@ -105,6 +105,7 @@ func (as *AntScene) HandleEvent(g *Game[GameState], r *sdl.Renderer, e sdl.Event
 			//}
 			//as.sceneTex.Destroy()
 			//as.sceneTex = t
+			as.field.UpdateAll()
 		case "Y":
 			as.propPher = !as.propPher
 			fmt.Printf("New Pheromone Propagation: %t\n", as.propPher)
@@ -236,8 +237,13 @@ func (as *AntScene) HandleEvent(g *Game[GameState], r *sdl.Renderer, e sdl.Event
 	return nil
 }
 
-func (as *AntScene) renderGridspot(g gridspot) uint32 {
-	divisor := pheromoneMax / 255
+var homePherMaxPresent = 1
+var foodPherMaxPresent = 1
+
+func (as *AntScene) renderGridspot(g *gridspot) uint32 {
+	//divisor := pheromoneMax / 255
+	homedivisor := (homePherMaxPresent / 255) + 1
+	fooddivisor := (foodPherMaxPresent / 255) + 1
 	if g.Wall {
 		return 0x333333FF
 	} else if g.Food > 0 {
@@ -252,14 +258,14 @@ func (as *AntScene) renderGridspot(g gridspot) uint32 {
 			vr uint32
 		)
 		if as.renderGreen {
-			vg = uint32(g.FoodPher / divisor)
+			vg = uint32(g.FoodPher / fooddivisor)
 			if vg > 255 {
 				vg = 255
 			}
 			vg = vg << 16
 		}
 		if as.renderRed {
-			vr = uint32(g.HomePher / divisor) //uint32((float32(as.grid[x][y].homePher) / 500.0) * 255.0)
+			vr = uint32(g.HomePher / homedivisor) //uint32((float32(as.grid[x][y].homePher) / 500.0) * 255.0)
 			if vr > 255 {
 				vr = 255
 			}
@@ -446,69 +452,86 @@ func (as *AntScene) Update(g *Game[GameState], r *sdl.Renderer, s *GameState) er
 	if as.pause {
 		return nil
 	}
-	//if as.parallel {
-	//	return as.ParallelUpdate(g, r, s)
-	//}
 	for a := range as.ants {
 		as.ants[a].Move(as)
-		//if as.grid[as.ants[a].pos.x][as.ants[a].pos.y].Home {
 		if as.field.Get(as.ants[a].pos.x, as.ants[a].pos.y).Home {
 			as.ants[a].food = 0
 			as.ants[a].marker = marker
 		}
-		//if as.grid[as.ants[a].pos.x][as.ants[a].pos.y].Food > 0 {
 		if spot := as.field.Get(as.ants[a].pos.x, as.ants[a].pos.y); spot.Food > 0 {
 			if as.ants[a].food == 0 {
 				as.ants[a].dir = as.ants[a].dir.Right(4)
-				//as.grid[as.ants[a].pos.x][as.ants[a].pos.y].Food -= 10
 				spot.Food -= 10
 				as.field.Update(as.ants[a].pos.x, as.ants[a].pos.y)
-				//as.field.Set(as.ants[a].pos.x, as.ants[a].pos.y, spot)
 				as.ants[a].food = 10
 			}
 			as.ants[a].marker = marker
 		}
 
 		if as.ants[a].food > 0 {
-			//if as.grid[as.ants[a].pos.x][as.ants[a].pos.y].FoodPher < pheromoneMax {
-			if spot := as.field.Get(as.ants[a].pos.x, as.ants[a].pos.y); spot.FoodPher < pheromoneMax {
-				//as.grid[as.ants[a].pos.x][as.ants[a].pos.y].FoodPher += as.ants[a].marker
-				spot.FoodPher += as.ants[a].marker
-				as.field.Update(as.ants[a].pos.x, as.ants[a].pos.y)
-				//as.field.Set(as.ants[a].pos.x, as.ants[a].pos.y, spot)
-				if as.ants[a].marker > 0 {
-					as.ants[a].marker -= 1
+			spot := as.field.Get(as.ants[a].pos.x, as.ants[a].pos.y)
+			if spot.FoodPher > as.ants[a].marker {
+				as.ants[a].marker = spot.FoodPher
+			} else {
+				spot.FoodPher = as.ants[a].marker
+				as.ants[a].marker -= (as.ants[a].marker / fadeDivisor) + 1
+				if as.renderPher {
+					as.field.Update(as.ants[a].pos.x, as.ants[a].pos.y)
 				}
-			} else if as.ants[a].marker > pheromoneExtend {
-				as.ants[a].marker -= 1
 			}
 		} else {
-			//if as.grid[as.ants[a].pos.x][as.ants[a].pos.y].HomePher < pheromoneMax {
-			if spot := as.field.Get(as.ants[a].pos.x, as.ants[a].pos.y); spot.HomePher < pheromoneMax {
-				//as.grid[as.ants[a].pos.x][as.ants[a].pos.y].HomePher += as.ants[a].marker
-				spot.HomePher += as.ants[a].marker
-				as.field.Update(as.ants[a].pos.x, as.ants[a].pos.y)
-				//as.field.Set(as.ants[a].pos.x, as.ants[a].pos.y, spot)
-				if as.ants[a].marker > 0 {
-					as.ants[a].marker -= 1
+			spot := as.field.Get(as.ants[a].pos.x, as.ants[a].pos.y)
+			if spot.HomePher > as.ants[a].marker {
+				as.ants[a].marker = spot.HomePher
+			} else {
+				spot.HomePher = as.ants[a].marker
+				as.ants[a].marker -= (as.ants[a].marker / fadeDivisor) + 1
+				if as.renderPher {
+					as.field.Update(as.ants[a].pos.x, as.ants[a].pos.y)
 				}
-			} else if as.ants[a].marker > pheromoneExtend {
-				as.ants[a].marker -= 1
 			}
 		}
+
+		// if as.ants[a].food > 0 && as.ants[a].marker > 0 {
+		// 	if spot := as.field.Get(as.ants[a].pos.x, as.ants[a].pos.y); spot.FoodPher < pheromoneMax {
+		// 		spot.FoodPher += as.ants[a].marker
+		// 		if as.ants[a].marker > 0 {
+		// 			as.ants[a].marker -= (as.ants[a].marker / fadeDivisor) + 1
+		// 		}
+		// 		as.field.Update(as.ants[a].pos.x, as.ants[a].pos.y)
+		// 	}
+		// } else if as.ants[a].marker > 0 {
+		// 	if spot := as.field.Get(as.ants[a].pos.x, as.ants[a].pos.y); spot.HomePher < pheromoneMax {
+		// 		spot.HomePher += as.ants[a].marker
+		// 		if as.ants[a].marker > 0 {
+		// 			as.ants[a].marker -= (as.ants[a].marker / fadeDivisor) + 1
+		// 		}
+		// 		as.field.Update(as.ants[a].pos.x, as.ants[a].pos.y)
+
+		// 	}
+		// }
 	}
-	//for x := range as.grid {
-	//for y := range as.grid[x] {
+	newfoodPherMaxPresent := 1
+	newhomePherMaxPresent := 1
+
 	for y := 0; y < as.field.height; y++ {
 		for x := 0; x < as.field.width; x++ {
 			update := false
 			spot := as.field.Get(x, y)
+			if spot.FoodPher > newfoodPherMaxPresent {
+				newfoodPherMaxPresent = spot.FoodPher
+			}
+			if spot.HomePher > newhomePherMaxPresent {
+				newhomePherMaxPresent = spot.HomePher
+			}
 			if spot.FoodPher > 0 {
 				spot.FoodPher -= (spot.FoodPher / fadeDivisor) + 1
+				//spot.FoodPher -= 1
 				update = true
 			}
 			if spot.HomePher > 0 {
 				spot.HomePher -= (spot.HomePher / fadeDivisor) + 1
+				//spot.HomePher -= 1
 				update = true
 			}
 			if as.propPher {
@@ -525,7 +548,9 @@ func (as *AntScene) Update(g *Game[GameState], r *sdl.Renderer, s *GameState) er
 								spot2 := as.field.Get(pt2.x, pt2.y)
 								if spot2.FoodPher < pheromoneMax {
 									spot2.FoodPher += (spot.FoodPher / 9)
-									as.field.Update(pt2.x, pt2.y)
+									if as.renderPher {
+										as.field.Update(pt2.x, pt2.y)
+									}
 								}
 							}
 						}
@@ -537,7 +562,9 @@ func (as *AntScene) Update(g *Game[GameState], r *sdl.Renderer, s *GameState) er
 								spot2 := as.field.Get(pt2.x, pt2.y)
 								if spot2.HomePher < pheromoneMax {
 									spot2.HomePher += (spot.HomePher / 9)
-									as.field.Update(pt2.x, pt2.y)
+									if as.renderPher {
+										as.field.Update(pt2.x, pt2.y)
+									}
 								}
 							}
 						}
@@ -554,7 +581,9 @@ func (as *AntScene) Update(g *Game[GameState], r *sdl.Renderer, s *GameState) er
 								pt2 := pt.PointAt(d)
 								spot2 := as.field.Get(pt2.x, pt2.y)
 								spot2.FoodPher += (spot.FoodPher / 9)
-								as.field.Update(pt2.x, pt2.y)
+								if as.renderPher {
+									as.field.Update(pt2.x, pt2.y)
+								}
 							}
 							spot.FoodPher /= 9
 							update = true
@@ -564,7 +593,9 @@ func (as *AntScene) Update(g *Game[GameState], r *sdl.Renderer, s *GameState) er
 								pt2 := pt.PointAt(d)
 								spot2 := as.field.Get(pt2.x, pt2.y)
 								spot2.HomePher += (spot.HomePher / 9)
-								as.field.Update(pt2.x, pt2.y)
+								if as.renderPher {
+									as.field.Update(pt2.x, pt2.y)
+								}
 							}
 							spot.HomePher /= 9
 							update = true
@@ -573,11 +604,14 @@ func (as *AntScene) Update(g *Game[GameState], r *sdl.Renderer, s *GameState) er
 				}
 			}
 			//as.field.Set(x, y, spot)
-			if update {
+			if update && as.renderPher {
 				as.field.Update(x, y)
 			}
 		}
 	}
+
+	foodPherMaxPresent = newfoodPherMaxPresent
+	homePherMaxPresent = newhomePherMaxPresent
 	return nil
 }
 

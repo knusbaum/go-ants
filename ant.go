@@ -166,12 +166,13 @@ func (a *Ant) Line(an *AntScene, d direction, size int) gridspot {
 	var pt gridspot
 	addspot := func(g *gridspot) bool {
 		if g.Wall {
+			pt.Wall = true
 			return false
 		}
-		pt.FoodPher += g.FoodPher + g.Food*100000
+		pt.FoodPher += g.FoodPher + g.Food*pheromoneMax*2
 		pt.HomePher += g.HomePher
 		if g.Home {
-			pt.HomePher += 100000
+			pt.HomePher += pheromoneMax * 2
 		}
 		return true
 	}
@@ -186,7 +187,7 @@ func (a *Ant) Line(an *AntScene, d direction, size int) gridspot {
 		for i := 0; i < size; i++ {
 			y := a.pos.y - i
 			x := a.pos.x + i
-			if y < 0 || x >= an.field.height {
+			if y < 0 || x >= an.field.width {
 				break
 			}
 			if !addspot(an.field.Get(x, y)) {
@@ -194,7 +195,7 @@ func (a *Ant) Line(an *AntScene, d direction, size int) gridspot {
 			}
 		}
 	case E:
-		for x := a.pos.x; x < a.pos.x+size && x < an.field.height; x++ {
+		for x := a.pos.x; x < a.pos.x+size && x < an.field.width; x++ {
 			if !addspot(an.field.Get(x, a.pos.y)) {
 				break
 			}
@@ -327,16 +328,19 @@ func (a *Ant) SumOctant(an *AntScene, d direction, size int) gridspot {
 }
 
 func (a *Ant) Move(an *AntScene) {
+	// We need ants to not always follow exactly the right path, or else they
+	// get stuck following very tight lines, and never explore.
 	if n := rand.Intn(10); n == 0 {
 		// straight := a.SumOctant(an, a.dir, 50)
 		// left := a.SumOctant(an, a.dir.Left(1), 50)
 		// right := a.SumOctant(an, a.dir.Right(1), 50)
 
-		straight := a.Line(an, a.dir, 50)
-		left := a.Line(an, a.dir.Left(1), 50)
-		lleft := a.Line(an, a.dir.Left(2), 50)
-		right := a.Line(an, a.dir.Right(1), 50)
-		rright := a.Line(an, a.dir.Right(2), 50)
+		const sight = 25
+		straight := a.Line(an, a.dir, sight)
+		left := a.Line(an, a.dir.Left(1), sight)
+		lleft := a.Line(an, a.dir.Left(2), sight)
+		right := a.Line(an, a.dir.Right(1), sight)
+		rright := a.Line(an, a.dir.Right(2), sight)
 
 		// Directions include weighted values of their left and right directions
 		straight.FoodPher += left.FoodPher/2 + right.FoodPher/2
@@ -346,20 +350,90 @@ func (a *Ant) Move(an *AntScene) {
 		right.FoodPher += rright.FoodPher/2 + straight.FoodPher/2
 		right.HomePher += rright.HomePher/2 + straight.HomePher/2
 
+		if straight.FoodPher < 0 || right.FoodPher < 0 || left.FoodPher < 0 {
+			panic("Less that zero")
+		}
+		// straightPower := straight.HomePher - (straight.FoodPher / 2)
+		// leftPower := left.HomePher - (left.FoodPher / 2)
+		// rightPower := right.HomePher - (right.FoodPher / 2)
+
+		followingPher := false
 		if a.food > 0 {
+			// if rightPower > straightPower && rightPower > leftPower {
+			// 	a.dir = a.dir.Right(1)
+			// 	followingPher = true
+			// } else if leftPower > straightPower && leftPower > rightPower {
+			// 	a.dir = a.dir.Left(1)
+			// 	followingPher = true
+			// }
 			if right.HomePher > straight.HomePher && right.HomePher > left.HomePher {
 				a.dir = a.dir.Right(1)
+				followingPher = true
 			} else if left.HomePher > straight.HomePher && left.HomePher > right.HomePher {
 				a.dir = a.dir.Left(1)
+				followingPher = true
 			}
 		} else {
 			if right.FoodPher > straight.FoodPher && right.FoodPher > left.FoodPher {
 				a.dir = a.dir.Right(1)
+				followingPher = true
 			} else if left.FoodPher > straight.FoodPher && left.FoodPher > right.FoodPher {
 				a.dir = a.dir.Left(1)
+				followingPher = true
 			}
 		}
 
+		// If we're not following pheromones, try following walls.
+		// if !followingPher {
+		// 	if 1 > 10 {
+		// 		a.dir = a.dir
+		// 	}
+		// }
+
+		if !followingPher {
+			if lleft.Wall {
+				if left.Wall {
+					if straight.Wall {
+						a.dir = a.dir.Right(1)
+					}
+				} else {
+					a.dir = a.dir.Left(1)
+				}
+			}
+			if rright.Wall {
+				if right.Wall {
+					if straight.Wall {
+						a.dir = a.dir.Left(1)
+					}
+				} else {
+					a.dir = a.dir.Right(1)
+				}
+			}
+		}
+
+		// else {
+		// 	if rightPower < straightPower && rightPower < leftPower {
+		// 		a.dir = a.dir.Right(1)
+		// 	} else if leftPower < straightPower && leftPower < rightPower {
+		// 		a.dir = a.dir.Left(1)
+		// 	}
+		// }
+
+		// if a.food > 0 {
+		// 	if right.HomePher > straight.HomePher && right.HomePher > left.HomePher {
+		// 		a.dir = a.dir.Right(1)
+		// 	} else if left.HomePher > straight.HomePher && left.HomePher > right.HomePher {
+		// 		a.dir = a.dir.Left(1)
+		// 	}
+		// } else {
+		// 	if right.FoodPher > straight.FoodPher && right.FoodPher > left.FoodPher {
+		// 		a.dir = a.dir.Right(1)
+		// 	} else if left.FoodPher > straight.FoodPher && left.FoodPher > right.FoodPher {
+		// 		a.dir = a.dir.Left(1)
+		// 	}
+		// }
+
+		// Take a random turn every once in a while
 		n := rand.Intn(10)
 		if n == 0 {
 			a.dir = a.dir.Left(1)
@@ -373,8 +447,8 @@ func (a *Ant) Move(an *AntScene) {
 		g, ok := a.GridAt(an, a.dir)
 		i := 0
 		for ; !ok || g.Wall; g, ok = a.GridAt(an, a.dir) {
-			//fmt.Printf("SPIN\n")
-			a.dir = a.dir.Right(1)
+			a.dir = a.dir.Right((rand.Intn(3) - 1) * 2)
+			//a.dir = a.dir.Right(1)
 			i++
 			if i >= 8 {
 				a.pos.x = 1
