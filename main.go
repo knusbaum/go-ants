@@ -97,6 +97,7 @@ func main() {
 	as := &AntScene{homefood: 10 * 3000 * antlife} // ants: make([]Ant, nants)}
 	//as := &AntScene{ants: make([]Ant, nants)}
 	as.Init()
+	//ebiten.SetMaxTPS(120)
 	ebiten.SetWindowSize(WIDTH, HEIGHT)
 	ebiten.SetWindowTitle("Your game's title")
 	// Call ebiten.RunGame to start your game loop.

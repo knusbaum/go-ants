@@ -44,7 +44,10 @@ func (f *Field[T]) Get(x, y int) *T {
 	return &f.vals[x+y*f.width]
 }
 
+//var updates int32
+
 func (f *Field[T]) Update(x, y int) {
+	//atomic.AddInt32(&updates, 1)
 	f.renderbuf[x+y*f.width] = f.valToColor(&f.vals[x+y*f.width])
 }
 

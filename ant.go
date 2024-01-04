@@ -330,7 +330,73 @@ func (a *Ant) SumOctant(an *AntScene, d direction, size int) gridspot {
 	return pt
 }
 
+// Returns whether or not the ant is alive
+func (a *Ant) Update(as *AntScene) bool {
+	a.Move(as)
+	if a.life <= 0 {
+		//as.field.Get(a.pos.x, a.pos.y).Food = 1
+		// if a.food > 0 {
+		// 	as.field.Get(a.pos.x, a.pos.y).Food += a.food
+		// }
+		return false
+	}
+	if as.field.Get(a.pos.x, a.pos.y).Home {
+		if a.food > 0 {
+			as.homefood += int64(a.food) * foodlife
+			a.food = 0
+		}
+		// need := int64(antlife - a.life)
+		// if need > as.homefood {
+		// 	need = as.homefood
+		// }
+		// as.homefood -= need
+		// a.life += int(need)
+		a.marker = marker
+	}
+	if spot := as.field.Get(a.pos.x, a.pos.y); spot.Food > 0 {
+		if a.food == 0 {
+			a.dir = a.dir.Right(4)
+			if spot.Food > 10 {
+				spot.Food -= 10
+				as.field.Update(a.pos.x, a.pos.y)
+				a.food = 10
+			} else {
+				a.food = spot.Food
+				spot.Food = 0
+				as.field.Update(a.pos.x, a.pos.y)
+			}
+		}
+		a.marker = marker
+	}
+
+	if a.food > 0 {
+		spot := as.field.Get(a.pos.x, a.pos.y)
+		if spot.FoodPher > a.marker {
+			a.marker = spot.FoodPher
+		} else {
+			spot.FoodPher = a.marker
+			a.marker -= (a.marker / antFadeDivisor) + 1
+			if as.renderPher {
+				as.field.Update(a.pos.x, a.pos.y)
+			}
+		}
+	} else {
+		spot := as.field.Get(a.pos.x, a.pos.y)
+		if spot.HomePher > a.marker {
+			a.marker = spot.HomePher
+		} else {
+			spot.HomePher = a.marker
+			a.marker -= (a.marker / antFadeDivisor) + 1
+			if as.renderPher {
+				as.field.Update(a.pos.x, a.pos.y)
+			}
+		}
+	}
+	return true
+}
+
 func (a *Ant) Move(an *AntScene) {
+	a.life -= 1
 	if a.life <= 0 {
 		return
 		// if a.food > 0 {
@@ -340,7 +406,6 @@ func (a *Ant) Move(an *AntScene) {
 		// 	return
 		// }
 	}
-	a.life -= 1
 
 	// We need ants to not always follow exactly the right path, or else they
 	// get stuck following very tight lines, and never explore.

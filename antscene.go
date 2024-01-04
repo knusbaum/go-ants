@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"log"
 	"os"
+	"runtime"
 	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -17,7 +18,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/examples/resources/fonts"
 )
 
-var workers = 6
+var workers = runtime.GOMAXPROCS(0)
 var mplusNormalFont font.Face
 
 type gridspot struct {
@@ -30,11 +31,13 @@ type gridspot struct {
 
 const antTexSize = 3
 const foodCount = 10
-const pheromoneMax = 8000
-const marker = 2500
+const pheromoneMax = 8191
+const pherShift = 5 //(2^13 = 8192), meaning 8192 is within 13 bits range, We want to shift that to 8 bits, so shift 5 out.
+const marker = 5000
 const fadeDivisor = 700 // bigger number, slower pheromone fade.
 const antFadeDivisor = 600
-const pheromoneExtend = 200
+
+// const pheromoneExtend = 200
 const antlife = 10000 // an ant spends 1 life per frame
 const foodlife = 2000 // amount of life 1 food gives an ant
 
@@ -59,6 +62,12 @@ type AntScene struct {
 	renderWorkChan     chan renderwork
 	followWalls        bool
 	homefood           int64
+
+	antwg            sync.WaitGroup
+	antworkerTrigger []chan struct{}
+
+	pherwg            sync.WaitGroup
+	pherworkerTrigger []chan struct{}
 }
 
 type gridwork struct {
@@ -163,62 +172,56 @@ func (as *AntScene) HandleInput() error {
 		fmt.Printf("Wall Following: %t\n", as.followWalls)
 	}
 
+	doSpot := func(x, y int, f func(x, y int, g *gridspot)) {
+		for i := x - 5; i < x+5; i++ {
+			if i < 0 || i >= WIDTH {
+				continue
+			}
+			for j := y - 5; j < y+5; j++ {
+				if j < 0 || j >= HEIGHT {
+					continue
+				}
+				spot := as.field.Get(int(i), int(j))
+				f(int(i), int(j), spot)
+			}
+		}
+	}
+
 	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
 		mx, my := ebiten.CursorPosition()
 		if mx != as.mousePX || my != as.mousePY {
-			for i := mx - 5; i < mx+5; i++ {
-				if i < 0 || i >= WIDTH {
-					continue
-				}
-				for j := my - 5; j < my+5; j++ {
-					if j < 0 || j >= HEIGHT {
-						continue
-					}
-					spot := as.field.Get(int(i), int(j))
+			doLine(mx, my, as.mousePX, as.mousePY, func(cx, cy int) {
+				doSpot(cx, cy, func(x, y int, spot *gridspot) {
 					spot.Wall = true
 					spot.Home = false
 					spot.Food = 0
-					as.field.Update(int(i), int(j))
-				}
-			}
+					as.field.Update(x, y)
+				})
+			})
 		}
 	} else if ebiten.IsMouseButtonPressed(ebiten.MouseButtonRight) {
 		mx, my := ebiten.CursorPosition()
 		if mx != as.mousePX || my != as.mousePY {
-			for i := mx - 5; i < mx+5; i++ {
-				if i < 0 || i >= WIDTH {
-					continue
-				}
-				for j := my - 5; j < my+5; j++ {
-					if j < 0 || j >= HEIGHT {
-						continue
-					}
-					spot := as.field.Get(int(i), int(j))
+			doLine(mx, my, as.mousePX, as.mousePY, func(cx, cy int) {
+				doSpot(cx, cy, func(x, y int, spot *gridspot) {
 					spot.Wall = false
 					spot.Home = false
 					spot.Food = 0
-					as.field.Update(int(i), int(j))
-				}
-			}
+					as.field.Update(x, y)
+				})
+			})
 		}
 	} else if ebiten.IsMouseButtonPressed(ebiten.MouseButtonMiddle) {
 		mx, my := ebiten.CursorPosition()
 		if mx != as.mousePX || my != as.mousePY {
-			for i := mx - 5; i < mx+5; i++ {
-				if i < 0 || i >= WIDTH {
-					continue
-				}
-				for j := my - 5; j < my+5; j++ {
-					if j < 0 || j >= HEIGHT {
-						continue
-					}
-					spot := as.field.Get(int(i), int(j))
+			doLine(mx, my, as.mousePX, as.mousePY, func(cx, cy int) {
+				doSpot(cx, cy, func(x, y int, spot *gridspot) {
 					spot.Wall = false
 					spot.Home = false
 					spot.Food = foodCount
-					as.field.Update(int(i), int(j))
-				}
-			}
+					as.field.Update(x, y)
+				})
+			})
 		}
 	}
 	mx, my := ebiten.CursorPosition()
@@ -227,12 +230,14 @@ func (as *AntScene) HandleInput() error {
 	return nil
 }
 
-var homePherMaxPresent = 1
-var foodPherMaxPresent = 1
+//var homePherMaxPresent = 1
+//var foodPherMaxPresent = 1
 
 func (as *AntScene) renderGridspot(g *gridspot) uint32 {
-	homedivisor := (homePherMaxPresent / 255) + 1
-	fooddivisor := (foodPherMaxPresent / 255) + 1
+	//homedivisor := (homePherMaxPresent / 255) + 1
+	//fooddivisor := (foodPherMaxPresent / 255) + 1
+	//homedivisor := (homePherMaxPresent >> 8) + 1
+	//fooddivisor := (foodPherMaxPresent >> 8) + 1
 	if g.Wall {
 		//return 0x333333FF
 		return 0xFF333333
@@ -250,18 +255,29 @@ func (as *AntScene) renderGridspot(g *gridspot) uint32 {
 			vr uint32
 		)
 		if as.renderGreen {
-			vg = uint32(g.FoodPher / fooddivisor)
-			if vg > 255 {
-				vg = 255
+			//vg = uint32(g.FoodPher / fooddivisor)
+			if g.FoodPher > pheromoneMax {
+				panic("TOO BIG")
 			}
+			vg = uint32(g.FoodPher) >> pherShift
+			// if vg > 255 {
+			// 	fmt.Printf("FOOD > 255: %d\n", vg)
+			// 	vg = 255
+			// }
+			vg = (vg & 0xFF) << 8
 			//vg = vg << 16
-			vg = vg << 8
 		}
 		if as.renderRed {
-			vr = uint32(g.HomePher / homedivisor)
-			if vr > 255 {
-				vr = 255
+			if g.HomePher > pheromoneMax {
+				panic("TOO BIG")
 			}
+			//vr = uint32(g.HomePher / homedivisor)
+			vr = uint32(g.HomePher) >> pherShift
+			// if vr > 255 {
+			// 	fmt.Printf("HOME > 255: %d\n", vg)
+			// 	vr = 255
+			// }
+			vr = (vr & 0xFF)
 			//vr = vr << 24
 		}
 		//return 0x000000FF | vg | vr
@@ -273,6 +289,7 @@ func (as *AntScene) renderGridspot(g *gridspot) uint32 {
 
 // func (as *AntScene) Init(g *Game[GameState], r *sdl.Renderer, s *GameState) error {
 func (as *AntScene) Init() error {
+	as.parallel = true
 	as.renderPher = false
 	as.renderGreen = true
 	as.renderRed = true
@@ -340,6 +357,27 @@ func (as *AntScene) Init() error {
 		Hinting: font.HintingVertical,
 	})
 
+	for i := 0; i < workers; i++ {
+		as.antworkerTrigger = append(as.antworkerTrigger, make(chan struct{}))
+		go func(i int) {
+			for range as.antworkerTrigger[i] {
+				partsize := (len(as.ants) / workers) + 1
+				as.UpdateAntPartial((partsize * i), (partsize*i)+partsize)
+				as.antwg.Done()
+			}
+		}(i)
+
+		as.pherworkerTrigger = append(as.pherworkerTrigger, make(chan struct{}))
+		go func(i int) {
+			partsize := (as.field.height / workers) + 1
+			for range as.pherworkerTrigger[i] {
+				as.UpdatePherPartial((partsize * i), (partsize*i)+partsize)
+				as.pherwg.Done()
+			}
+		}(i)
+
+	}
+
 	return nil
 }
 
@@ -352,104 +390,44 @@ func (as *AntScene) relocateAnts() {
 
 var frame uint64
 
-// func (as *AntScene) Update(g *Game[GameState], r *sdl.Renderer, s *GameState) error {
-func (as *AntScene) Update() error {
-	frame++
+func (as *AntScene) UpdateAntPartial(start, end int) {
+	if start >= len(as.ants) {
+		return
+	}
+	if end > len(as.ants) {
+		end = len(as.ants)
+	}
+	//fmt.Printf("UPDATING %d - %d\n", start, end)
+	for a := range as.ants[start:end] {
+		as.ants[start+a].Update(as)
+	}
+}
 
-	if as.homefood/(antlife*10) > int64(len(as.ants)) {
-		as.homefood -= antlife
-		as.ants = append(as.ants, Ant{life: antlife})
+//var newfoodPherMaxPresent int32
+//var newhomePherMaxPresent int32
+
+func (as *AntScene) UpdatePherPartial(start, end int) {
+	if start >= as.field.height {
+		return
+	}
+	if end > as.field.height {
+		end = as.field.height
 	}
 
-	if frame%120 == 0 {
-		fmt.Printf("homefood: %d, ants: %d\n", as.homefood, len(as.ants))
-	}
-	if err := as.HandleInput(); err != nil {
-		return err
-	}
-	if as.pause {
-		return nil
-	}
-	var k int
-	for a := range as.ants {
-		as.ants[a].Move(as)
-		if as.ants[a].life <= 0 {
-			//as.field.Get(as.ants[a].pos.x, as.ants[a].pos.y).Food = 1
-			// if as.ants[a].food > 0 {
-			// 	as.field.Get(as.ants[a].pos.x, as.ants[a].pos.y).Food += as.ants[a].food
-			// }
-			continue
-		}
-		if as.field.Get(as.ants[a].pos.x, as.ants[a].pos.y).Home {
-			if as.ants[a].food > 0 {
-				as.homefood += int64(as.ants[a].food) * foodlife
-				as.ants[a].food = 0
-			}
-			// need := int64(antlife - as.ants[a].life)
-			// if need > as.homefood {
-			// 	need = as.homefood
-			// }
-			// as.homefood -= need
-			// as.ants[a].life += int(need)
-			as.ants[a].marker = marker
-		}
-		if spot := as.field.Get(as.ants[a].pos.x, as.ants[a].pos.y); spot.Food > 0 {
-			if as.ants[a].food == 0 {
-				as.ants[a].dir = as.ants[a].dir.Right(4)
-				if spot.Food > 10 {
-					spot.Food -= 10
-					as.field.Update(as.ants[a].pos.x, as.ants[a].pos.y)
-					as.ants[a].food = 10
-				} else {
-					as.ants[a].food = spot.Food
-					spot.Food = 0
-					as.field.Update(as.ants[a].pos.x, as.ants[a].pos.y)
-				}
-			}
-			as.ants[a].marker = marker
-		}
+	// localNewfoodPherMaxPresent := 1
+	// localNewhomePherMaxPresent := 1
 
-		if as.ants[a].food > 0 {
-			spot := as.field.Get(as.ants[a].pos.x, as.ants[a].pos.y)
-			if spot.FoodPher > as.ants[a].marker {
-				as.ants[a].marker = spot.FoodPher
-			} else {
-				spot.FoodPher = as.ants[a].marker
-				as.ants[a].marker -= (as.ants[a].marker / antFadeDivisor) + 1
-				if as.renderPher {
-					as.field.Update(as.ants[a].pos.x, as.ants[a].pos.y)
-				}
-			}
-		} else {
-			spot := as.field.Get(as.ants[a].pos.x, as.ants[a].pos.y)
-			if spot.HomePher > as.ants[a].marker {
-				as.ants[a].marker = spot.HomePher
-			} else {
-				spot.HomePher = as.ants[a].marker
-				as.ants[a].marker -= (as.ants[a].marker / antFadeDivisor) + 1
-				if as.renderPher {
-					as.field.Update(as.ants[a].pos.x, as.ants[a].pos.y)
-				}
-			}
-		}
-		as.ants[k] = as.ants[a]
-		k++
-	}
-	//fmt.Printf("Copyng ants(%d) to ants[:%d]\n", len(as.ants), k)
-	as.ants = as.ants[:k]
-	newfoodPherMaxPresent := 1
-	newhomePherMaxPresent := 1
-
-	for y := 0; y < as.field.height; y++ {
+	for y := start; y < end; y++ {
 		for x := 0; x < as.field.width; x++ {
 			update := false
 			spot := as.field.Get(x, y)
-			if spot.FoodPher > newfoodPherMaxPresent {
-				newfoodPherMaxPresent = spot.FoodPher
-			}
-			if spot.HomePher > newhomePherMaxPresent {
-				newhomePherMaxPresent = spot.HomePher
-			}
+			// TODO: Atomics or something. These are data races
+			// if spot.FoodPher > localNewfoodPherMaxPresent {
+			// 	localNewfoodPherMaxPresent = spot.FoodPher
+			// }
+			// if spot.HomePher > localNewhomePherMaxPresent {
+			// 	localNewhomePherMaxPresent = spot.HomePher
+			// }
 			if spot.FoodPher > 0 {
 				spot.FoodPher -= (spot.FoodPher / fadeDivisor) + 1
 				update = true
@@ -464,9 +442,88 @@ func (as *AntScene) Update() error {
 			}
 		}
 	}
+	// for {
+	// 	if v := atomic.LoadInt32(&newfoodPherMaxPresent); int32(localNewfoodPherMaxPresent) > v {
+	// 		if atomic.CompareAndSwapInt32(&newfoodPherMaxPresent, v, int32(localNewfoodPherMaxPresent)) {
+	// 			break
+	// 		}
+	// 	} else {
+	// 		break
+	// 	}
+	// }
+	// for {
+	// 	if v := atomic.LoadInt32(&newhomePherMaxPresent); int32(localNewhomePherMaxPresent) > v {
+	// 		if atomic.CompareAndSwapInt32(&newhomePherMaxPresent, v, int32(localNewhomePherMaxPresent)) {
+	// 			break
+	// 		}
+	// 	} else {
+	// 		break
+	// 	}
+	// }
+}
 
-	foodPherMaxPresent = newfoodPherMaxPresent
-	homePherMaxPresent = newhomePherMaxPresent
+// func (as *AntScene) Update(g *Game[GameState], r *sdl.Renderer, s *GameState) error {
+func (as *AntScene) Update() error {
+	if err := as.HandleInput(); err != nil {
+		return err
+	}
+	if as.pause {
+		return nil
+	}
+	frame++
+
+	//for i := 0; i < 10; i++ {
+	if as.homefood/(antlife*10) > int64(len(as.ants)) {
+		//fmt.Printf("GREATER!\n")
+		as.homefood -= antlife
+		as.ants = append(as.ants, Ant{life: antlife})
+	}
+	//}
+
+	if frame%10 == 0 {
+		fmt.Printf("homefood: %d, ants: %d, ratio: %d / %d \n", as.homefood, len(as.ants), as.homefood/(antlife*10), len(as.ants))
+	}
+
+	// partsize := (len(as.ants) / workers) + 1
+	// for i := 0; i < workers; i++ {
+	// 	as.UpdateAntPartial((partsize * i), (partsize*i)+partsize)
+	// }
+
+	if as.parallel {
+		as.antwg.Add(workers)
+		for i := 0; i < workers; i++ {
+			as.antworkerTrigger[i] <- struct{}{}
+		}
+		as.antwg.Wait()
+	} else {
+		as.UpdateAntPartial(0, len(as.ants))
+	}
+
+	var k int
+	for a := range as.ants {
+		if as.ants[a].life < 0 {
+			continue
+		}
+		as.ants[k] = as.ants[a]
+		k++
+	}
+	as.ants = as.ants[:k]
+
+	// newfoodPherMaxPresent = 1
+	// newhomePherMaxPresent = 1
+
+	if as.parallel {
+		as.pherwg.Add(workers)
+		for i := 0; i < workers; i++ {
+			as.pherworkerTrigger[i] <- struct{}{}
+		}
+		as.pherwg.Wait()
+	} else {
+		as.UpdatePherPartial(0, as.field.height)
+	}
+
+	// foodPherMaxPresent = int(newfoodPherMaxPresent)
+	// homePherMaxPresent = int(newhomePherMaxPresent)
 	return nil
 }
 
@@ -563,7 +620,7 @@ func (as *AntScene) Draw(screen *ebiten.Image) {
 			screen.DrawImage(im, &dio)
 		}
 	}
-	msg := fmt.Sprintf("Ticks/Sec: %0.2f, Hive Food: %d, Ants: %d", ebiten.ActualTPS(), as.homefood, len(as.ants))
+	msg := fmt.Sprintf("FPS: %02.f, Ticks/Sec: %0.2f, Hive Food: %d, Ants: %d", ebiten.ActualFPS(), ebiten.ActualTPS(), as.homefood, len(as.ants))
 	text.Draw(screen, msg, mplusNormalFont, 10, 40, color.White)
 	return
 }
@@ -579,4 +636,52 @@ func (as *AntScene) Destroy() {
 // If you don't have to adjust the screen size with the outside size, just return a fixed size.
 func (as *AntScene) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
 	return WIDTH, HEIGHT
+}
+
+func absi(i int) int {
+	if i < 0 {
+		return -i
+	}
+	return i
+}
+
+// Bresenham's line algorithm
+func doLine(x0, y0, x1, y1 int, f func(x, y int)) {
+	dx := absi(x1 - x0)
+	var sx int
+	if x0 < x1 {
+		sx = 1
+	} else {
+		sx = -1
+	}
+	dy := -absi(y1 - y0)
+	var sy int
+	if y0 < y1 {
+		sy = 1
+	} else {
+		sy = -1
+	}
+	error := dx + dy
+
+	for {
+		f(x0, y0)
+		if x0 == x1 && y0 == y1 {
+			break
+		}
+		e2 := 2 * error
+		if e2 >= dy {
+			if x0 == x1 {
+				break
+			}
+			error = error + dy
+			x0 = x0 + sx
+		}
+		if e2 <= dx {
+			if y0 == y1 {
+				break
+			}
+			error = error + dx
+			y0 = y0 + sy
+		}
+	}
 }
