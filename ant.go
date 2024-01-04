@@ -1,9 +1,8 @@
 package main
 
 import (
+	"fmt"
 	"math/rand"
-
-	"github.com/veandco/go-sdl2/sdl"
 )
 
 type direction int
@@ -83,6 +82,7 @@ type Ant struct {
 	dir    direction
 	food   int
 	marker int
+	life   int
 }
 
 func (a *Ant) GridAt(an *AntScene, d direction) (gridspot, bool) {
@@ -112,55 +112,55 @@ func (d direction) Right(n int) direction {
 	return d
 }
 
-func (a *Ant) OctantRect(d direction, size int) sdl.Rect {
-	var (
-		start point
-		end   point
-	)
-	switch d {
-	case N:
-		start.x = a.pos.x - (size / 2)
-		start.y = a.pos.y - size
-		end.x = a.pos.x + (size / 2)
-		end.y = a.pos.y
-	case NE:
-		start.x = a.pos.x
-		start.y = a.pos.y - size
-		end.x = a.pos.x + size
-		end.y = a.pos.y
-	case E:
-		start.x = a.pos.x
-		start.y = a.pos.y - (size / 2)
-		end.x = a.pos.x + size
-		end.y = a.pos.y + (size / 2)
-	case SE:
-		start.x = a.pos.x
-		start.y = a.pos.y
-		end.x = a.pos.x + size
-		end.y = a.pos.y + size
-	case S:
-		start.x = a.pos.x - (size / 2)
-		start.y = a.pos.y
-		end.x = a.pos.x + (size / 2)
-		end.y = a.pos.y + size
-	case SW:
-		start.x = a.pos.x - size
-		start.y = a.pos.y
-		end.x = a.pos.x
-		end.y = a.pos.y + size
-	case W:
-		start.x = a.pos.x - size
-		start.y = a.pos.y - (size / 2)
-		end.x = a.pos.x
-		end.y = a.pos.y + (size / 2)
-	case NW:
-		start.x = a.pos.x - size
-		start.y = a.pos.y - size
-		end.x = a.pos.x
-		end.y = a.pos.y
-	}
-	return sdl.Rect{int32(start.x), int32(start.y), int32(end.x - start.x), int32(end.y - start.y)}
-}
+// func (a *Ant) OctantRect(d direction, size int) sdl.Rect {
+// 	var (
+// 		start point
+// 		end   point
+// 	)
+// 	switch d {
+// 	case N:
+// 		start.x = a.pos.x - (size / 2)
+// 		start.y = a.pos.y - size
+// 		end.x = a.pos.x + (size / 2)
+// 		end.y = a.pos.y
+// 	case NE:
+// 		start.x = a.pos.x
+// 		start.y = a.pos.y - size
+// 		end.x = a.pos.x + size
+// 		end.y = a.pos.y
+// 	case E:
+// 		start.x = a.pos.x
+// 		start.y = a.pos.y - (size / 2)
+// 		end.x = a.pos.x + size
+// 		end.y = a.pos.y + (size / 2)
+// 	case SE:
+// 		start.x = a.pos.x
+// 		start.y = a.pos.y
+// 		end.x = a.pos.x + size
+// 		end.y = a.pos.y + size
+// 	case S:
+// 		start.x = a.pos.x - (size / 2)
+// 		start.y = a.pos.y
+// 		end.x = a.pos.x + (size / 2)
+// 		end.y = a.pos.y + size
+// 	case SW:
+// 		start.x = a.pos.x - size
+// 		start.y = a.pos.y
+// 		end.x = a.pos.x
+// 		end.y = a.pos.y + size
+// 	case W:
+// 		start.x = a.pos.x - size
+// 		start.y = a.pos.y - (size / 2)
+// 		end.x = a.pos.x
+// 		end.y = a.pos.y + (size / 2)
+// 	case NW:
+// 		start.x = a.pos.x - size
+// 		start.y = a.pos.y - size
+// 		end.x = a.pos.x
+// 		end.y = a.pos.y
+// 	}
+// 	return sdl.Rect{int32(start.x), int32(start.y), int32(end.x - start.x), int32(end.y - start.y)}
+// }
 
 func (a *Ant) Line(an *AntScene, d direction, size int) gridspot {
 	var pt gridspot
@@ -168,6 +168,9 @@ func (a *Ant) Line(an *AntScene, d direction, size int) gridspot {
 		if g.Wall {
 			pt.Wall = true
 			return false
+		}
+		if g.Food < 0 {
+			panic("g.FOOD < 0 \n")
 		}
 		pt.FoodPher += g.FoodPher + g.Food*pheromoneMax*2
 		pt.HomePher += g.HomePher
@@ -328,19 +331,36 @@ func (a *Ant) SumOctant(an *AntScene, d direction, size int) gridspot {
 }
 
 func (a *Ant) Move(an *AntScene) {
+	if a.life <= 0 {
+		return
+		// if a.food > 0 {
+		// 	a.food--
+		// 	a.life += foodlife
+		// } else {
+		// 	return
+		// }
+	}
+	a.life -= 1
+
 	// We need ants to not always follow exactly the right path, or else they
 	// get stuck following very tight lines, and never explore.
+	//fmt.Printf("Dizziness: %d\n", a.dizziness)
 	if n := rand.Intn(10); n == 0 {
 		// straight := a.SumOctant(an, a.dir, 50)
 		// left := a.SumOctant(an, a.dir.Left(1), 50)
 		// right := a.SumOctant(an, a.dir.Right(1), 50)
 
-		const sight = 25
+		const sight = 50
 		straight := a.Line(an, a.dir, sight)
 		left := a.Line(an, a.dir.Left(1), sight)
 		lleft := a.Line(an, a.dir.Left(2), sight)
 		right := a.Line(an, a.dir.Right(1), sight)
 		rright := a.Line(an, a.dir.Right(2), sight)
+
+		if straight.FoodPher < 0 || right.FoodPher < 0 || left.FoodPher < 0 {
+			panic(fmt.Sprintf("Ant(%d,%d,%d): Less that zero: straight: %#v, left: %#v, right: %#v, lleft: %#v, rright: %#v",
+				a.pos.x, a.pos.y, a.dir, straight, left, right, lleft, rright))
+		}
 
 		// Directions include weighted values of their left and right directions
 		straight.FoodPher += left.FoodPher/2 + right.FoodPher/2
@@ -350,15 +370,12 @@ func (a *Ant) Move(an *AntScene) {
 		right.FoodPher += rright.FoodPher/2 + straight.FoodPher/2
 		right.HomePher += rright.HomePher/2 + straight.HomePher/2
 
-		if straight.FoodPher < 0 || right.FoodPher < 0 || left.FoodPher < 0 {
-			panic("Less that zero")
-		}
-		// straightPower := straight.HomePher - (straight.FoodPher / 2)
-		// leftPower := left.HomePher - (left.FoodPher / 2)
-		// rightPower := right.HomePher - (right.FoodPher / 2)
+		// straightPower := straight.HomePher - (straight.FoodPher * 2)
+		// leftPower := left.HomePher - (left.FoodPher * 2)
+		// rightPower := right.HomePher - (right.FoodPher * 2)
 
 		followingPher := false
-		if a.food > 0 {
+		if a.food > 0 { //|| a.life < antlife/2 { // go home if we have food or we need food
 			// if rightPower > straightPower && rightPower > leftPower {
 			// 	a.dir = a.dir.Right(1)
 			// 	followingPher = true
@@ -372,13 +389,24 @@ func (a *Ant) Move(an *AntScene) {
 			} else if left.HomePher > straight.HomePher && left.HomePher > right.HomePher {
 				a.dir = a.dir.Left(1)
 				followingPher = true
+			} else if straight.HomePher > left.HomePher && straight.HomePher > right.HomePher {
+				followingPher = true
 			}
 		} else {
+			// if rightPower < straightPower && rightPower < leftPower {
+			// 	a.dir = a.dir.Right(1)
+			// 	//followingPher = true
+			// } else if leftPower < straightPower && leftPower < rightPower {
+			// 	a.dir = a.dir.Left(1)
+			// 	//followingPher = true
+			// }
 			if right.FoodPher > straight.FoodPher && right.FoodPher > left.FoodPher {
 				a.dir = a.dir.Right(1)
 				followingPher = true
 			} else if left.FoodPher > straight.FoodPher && left.FoodPher > right.FoodPher {
 				a.dir = a.dir.Left(1)
+				followingPher = true
+			} else if straight.FoodPher > left.FoodPher && straight.FoodPher > right.FoodPher {
 				followingPher = true
 			}
 		}
@@ -390,48 +418,30 @@ func (a *Ant) Move(an *AntScene) {
 		// 	}
 		// }
 
-		if !followingPher {
-			if lleft.Wall {
-				if left.Wall {
-					if straight.Wall {
-						a.dir = a.dir.Right(1)
-					}
-				} else {
-					a.dir = a.dir.Left(1)
-				}
-			}
-			if rright.Wall {
-				if right.Wall {
-					if straight.Wall {
+		if an.followWalls {
+			//if n := rand.Intn(10); n == 0 {
+			if !followingPher {
+				if lleft.Wall {
+					if left.Wall {
+						if straight.Wall {
+							a.dir = a.dir.Right(1)
+						}
+					} else {
 						a.dir = a.dir.Left(1)
 					}
-				} else {
-					a.dir = a.dir.Right(1)
+				}
+				if rright.Wall {
+					if right.Wall {
+						if straight.Wall {
+							a.dir = a.dir.Left(1)
+						}
+					} else {
+						a.dir = a.dir.Right(1)
+					}
 				}
 			}
+			//}
 		}
-
-		// else {
-		// 	if rightPower < straightPower && rightPower < leftPower {
-		// 		a.dir = a.dir.Right(1)
-		// 	} else if leftPower < straightPower && leftPower < rightPower {
-		// 		a.dir = a.dir.Left(1)
-		// 	}
-		// }
-
-		// if a.food > 0 {
-		// 	if right.HomePher > straight.HomePher && right.HomePher > left.HomePher {
-		// 		a.dir = a.dir.Right(1)
-		// 	} else if left.HomePher > straight.HomePher && left.HomePher > right.HomePher {
-		// 		a.dir = a.dir.Left(1)
-		// 	}
-		// } else {
-		// 	if right.FoodPher > straight.FoodPher && right.FoodPher > left.FoodPher {
-		// 		a.dir = a.dir.Right(1)
-		// 	} else if left.FoodPher > straight.FoodPher && left.FoodPher > right.FoodPher {
-		// 		a.dir = a.dir.Left(1)
-		// 	}
-		// }
 
 		// Take a random turn every once in a while
 		n := rand.Intn(10)
@@ -450,7 +460,7 @@ func (a *Ant) Move(an *AntScene) {
 			a.dir = a.dir.Right((rand.Intn(3) - 1) * 2)
 			//a.dir = a.dir.Right(1)
 			i++
-			if i >= 8 {
+			if i >= 64 {
 				a.pos.x = 1
 				a.pos.y = 1
 				return
