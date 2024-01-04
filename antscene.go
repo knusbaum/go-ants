@@ -38,8 +38,10 @@ const fadeDivisor = 700 // bigger number, slower pheromone fade.
 const antFadeDivisor = 600
 
 // const pheromoneExtend = 200
-const antlife = 10000 // an ant spends 1 life per frame
-const foodlife = 2000 // amount of life 1 food gives an ant
+const antlife = 5000 // an ant spends 1 life per frame
+const foodlife = 100 // amount of life 1 food gives an ant
+const spawnParam = 10
+const maxants = 5000
 
 type AntScene struct {
 	ants               []Ant
@@ -341,7 +343,7 @@ func (as *AntScene) Init() error {
 		as.ants[a].life = antlife
 	}
 	if as.homefood == 0 {
-		as.homefood = int64(len(as.ants)) * antlife * 10
+		as.homefood = int64(len(as.ants)) * antlife * spawnParam
 	}
 
 	// TTF
@@ -472,16 +474,20 @@ func (as *AntScene) Update() error {
 	}
 	frame++
 
-	//for i := 0; i < 10; i++ {
-	if as.homefood/(antlife*10) > int64(len(as.ants)) {
-		//fmt.Printf("GREATER!\n")
-		as.homefood -= antlife
-		as.ants = append(as.ants, Ant{life: antlife})
+	n := maxants / antlife
+	if n == 0 {
+		n = 1
 	}
-	//}
+	for i := 0; i < n; i++ {
+		if as.homefood/(antlife*spawnParam) > int64(len(as.ants)) {
+			//fmt.Printf("GREATER!\n")
+			as.homefood -= antlife
+			as.ants = append(as.ants, Ant{life: antlife})
+		}
+	}
 
 	if frame%10 == 0 {
-		fmt.Printf("homefood: %d, ants: %d, ratio: %d / %d \n", as.homefood, len(as.ants), as.homefood/(antlife*10), len(as.ants))
+		fmt.Printf("homefood: %d, ants: %d, ratio: %d / %d \n", as.homefood, len(as.ants), as.homefood/(antlife*spawnParam), len(as.ants))
 	}
 
 	// partsize := (len(as.ants) / workers) + 1
