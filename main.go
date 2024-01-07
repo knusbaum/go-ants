@@ -1,3 +1,5 @@
+//go:build !wasm
+
 package main
 
 import (
@@ -9,14 +11,10 @@ import (
 )
 
 const (
-	WIDTH  = 1024
-	HEIGHT = 768
+	WIDTH  = 1280
+	HEIGHT = 720
 	nants  = 3000
 )
-
-type GameState struct {
-	x int
-}
 
 // type LineScene struct {
 // 	linex1 int32
@@ -81,6 +79,8 @@ func main() {
 	// ants := make([]Ant, nants)
 	// g.PushScene(&AntScene{ants: ants})
 
+	var err error
+
 	f, err := os.Create("ants.cpu")
 	if err != nil {
 		log.Fatal("could not create CPU profile: ", err)
@@ -94,14 +94,23 @@ func main() {
 	//err = g.Run()
 	//fmt.Printf("Finished: %v\n", err)
 
-	as := &AntScene{homefood: 10 * 3000 * antlife} // ants: make([]Ant, nants)}
+	//as := &AntScene{homefood: 10 * 3000 * antlife} // ants: make([]Ant, nants)}
 	//as := &AntScene{ants: make([]Ant, nants)}
-	as.Init()
+	//as.Init()
 	//ebiten.SetMaxTPS(120)
 	ebiten.SetWindowSize(WIDTH, HEIGHT)
+	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 	ebiten.SetWindowTitle("Your game's title")
+
+	g := NewGame[GameState](WIDTH, HEIGHT, NewGameState(WIDTH, HEIGHT)) //&Game[GameState]{}
+	as := &AntScene{homelife: 3000 * 10000}
+	err = g.PushScene(as)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// Call ebiten.RunGame to start your game loop.
-	if err := ebiten.RunGame(as); err != nil {
+	if err := ebiten.RunGame(g); err != nil {
 		log.Fatal(err)
 	}
 

@@ -87,7 +87,7 @@ type Ant struct {
 
 func (a *Ant) GridAt(an *AntScene, d direction) (gridspot, bool) {
 	np := a.pos.PointAt(d)
-	if np.Within(0, 0, WIDTH, HEIGHT) {
+	if np.Within(0, 0, an.st.width, an.st.height) {
 		//return an.grid[np.x][np.y], true
 		return *an.field.Get(np.x, np.y), true
 	}
@@ -254,7 +254,7 @@ func (a *Ant) Line(an *AntScene, d direction, size int) gridspot {
 	return pt
 }
 
-func (a *Ant) SumOctant(an *AntScene, d direction, size int) gridspot {
+func (a *Ant) SumOctant(g *GameState, an *AntScene, d direction, size int) gridspot {
 	var (
 		start point
 		end   point
@@ -307,7 +307,7 @@ func (a *Ant) SumOctant(an *AntScene, d direction, size int) gridspot {
 
 			p := point{x, y}
 			//if p.Within(0, 0, WIDTH, HEIGHT) && !an.grid[x][y].Wall
-			if p.Within(0, 0, WIDTH, HEIGHT) {
+			if p.Within(0, 0, an.st.width, an.st.height) {
 				//spot := an.field.Get(x, y)
 				if !an.field.vals[x+y*an.field.width].Wall {
 					pt.FoodPher += an.field.vals[x+y*an.field.width].FoodPher + an.field.vals[x+y*an.field.width].Food*100000 // - (an.grid[x][y].homePher / 4)
@@ -319,15 +319,23 @@ func (a *Ant) SumOctant(an *AntScene, d direction, size int) gridspot {
 			}
 		}
 	}
-	if an.pherOverload {
-		if pt.FoodPher > pheromoneMax*an.pherOverloadFactor {
-			pt.FoodPher = pheromoneMax * an.pherOverloadFactor
-		}
-		if pt.HomePher > pheromoneMax*an.pherOverloadFactor {
-			pt.HomePher = pheromoneMax * an.pherOverloadFactor
-		}
-	}
+	// if an.pherOverload {
+	// 	if pt.FoodPher > pheromoneMax*an.pherOverloadFactor {
+	// 		pt.FoodPher = pheromoneMax * an.pherOverloadFactor
+	// 	}
+	// 	if pt.HomePher > pheromoneMax*an.pherOverloadFactor {
+	// 		pt.HomePher = pheromoneMax * an.pherOverloadFactor
+	// 	}
+	// }
 	return pt
+}
+
+func antFadeDivisor(d int) int {
+	d -= 100
+	if d <= 0 {
+		d = 1
+	}
+	return d
 }
 
 // Returns whether or not the ant is alive
@@ -342,7 +350,7 @@ func (a *Ant) Update(as *AntScene) bool {
 	}
 	if as.field.Get(a.pos.x, a.pos.y).Home {
 		if a.food > 0 {
-			as.homefood += int64(a.food) * foodlife
+			as.homelife += int64(a.food) * int64(as.st.foodlife)
 			a.food = 0
 		}
 		// need := int64(antlife - a.life)
@@ -375,8 +383,8 @@ func (a *Ant) Update(as *AntScene) bool {
 			a.marker = spot.FoodPher
 		} else {
 			spot.FoodPher = a.marker
-			a.marker -= (a.marker / antFadeDivisor) + 1
-			if as.renderPher {
+			a.marker -= (a.marker / antFadeDivisor(as.st.fadedivisor)) + 1
+			if as.st.renderPher {
 				as.field.Update(a.pos.x, a.pos.y)
 			}
 		}
@@ -386,8 +394,8 @@ func (a *Ant) Update(as *AntScene) bool {
 			a.marker = spot.HomePher
 		} else {
 			spot.HomePher = a.marker
-			a.marker -= (a.marker / antFadeDivisor) + 1
-			if as.renderPher {
+			a.marker -= (a.marker / antFadeDivisor(as.st.fadedivisor)) + 1
+			if as.st.renderPher {
 				as.field.Update(a.pos.x, a.pos.y)
 			}
 		}
@@ -435,10 +443,6 @@ func (a *Ant) Move(an *AntScene) {
 		right.FoodPher += rright.FoodPher/2 + straight.FoodPher/2
 		right.HomePher += rright.HomePher/2 + straight.HomePher/2
 
-		// straightPower := straight.HomePher - (straight.FoodPher * 2)
-		// leftPower := left.HomePher - (left.FoodPher * 2)
-		// rightPower := right.HomePher - (right.FoodPher * 2)
-
 		followingPher := false
 		if a.food > 0 { //|| a.life < antlife/2 { // go home if we have food or we need food
 			// if rightPower > straightPower && rightPower > leftPower {
@@ -458,33 +462,32 @@ func (a *Ant) Move(an *AntScene) {
 				followingPher = true
 			}
 		} else {
-			// if rightPower < straightPower && rightPower < leftPower {
-			// 	a.dir = a.dir.Right(1)
-			// 	//followingPher = true
-			// } else if leftPower < straightPower && leftPower < rightPower {
-			// 	a.dir = a.dir.Left(1)
-			// 	//followingPher = true
-			// }
-			if right.FoodPher > straight.FoodPher && right.FoodPher > left.FoodPher {
-				a.dir = a.dir.Right(1)
-				followingPher = true
-			} else if left.FoodPher > straight.FoodPher && left.FoodPher > right.FoodPher {
-				a.dir = a.dir.Left(1)
-				followingPher = true
-			} else if straight.FoodPher > left.FoodPher && straight.FoodPher > right.FoodPher {
-				followingPher = true
+			if an.st.antisocial {
+				straightPower := straight.HomePher - (straight.FoodPher)
+				leftPower := left.HomePher - (left.FoodPher)
+				rightPower := right.HomePher - (right.FoodPher)
+
+				if rightPower < straightPower && rightPower < leftPower {
+					a.dir = a.dir.Right(1)
+					//followingPher = true
+				} else if leftPower < straightPower && leftPower < rightPower {
+					a.dir = a.dir.Left(1)
+					//followingPher = true
+				}
+			} else {
+				if right.FoodPher > straight.FoodPher && right.FoodPher > left.FoodPher {
+					a.dir = a.dir.Right(1)
+					followingPher = true
+				} else if left.FoodPher > straight.FoodPher && left.FoodPher > right.FoodPher {
+					a.dir = a.dir.Left(1)
+					followingPher = true
+				} else if straight.FoodPher > left.FoodPher && straight.FoodPher > right.FoodPher {
+					followingPher = true
+				}
 			}
 		}
 
-		// If we're not following pheromones, try following walls.
-		// if !followingPher {
-		// 	if 1 > 10 {
-		// 		a.dir = a.dir
-		// 	}
-		// }
-
-		if an.followWalls {
-			//if n := rand.Intn(10); n == 0 {
+		if an.st.followWalls {
 			if !followingPher {
 				if lleft.Wall {
 					if left.Wall {
@@ -505,7 +508,6 @@ func (a *Ant) Move(an *AntScene) {
 					}
 				}
 			}
-			//}
 		}
 
 		// Take a random turn every once in a while
@@ -534,8 +536,4 @@ func (a *Ant) Move(an *AntScene) {
 	}
 
 	a.pos = a.pos.PointAt(a.dir)
-
-	// 	if a.marker > 0 {
-	// 		a.marker -= 8
-	// 	}
 }

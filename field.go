@@ -18,21 +18,14 @@ type Field[T any] struct {
 }
 
 func NewField[T any](width, height int, toColor func(*T) uint32) (*Field[T], error) {
-	// t, err := r.CreateTexture(uint32(sdl.PIXELFORMAT_RGBA8888), sdl.TEXTUREACCESS_STREAMING, int32(width), int32(height))
-	// if err != nil {
-	// 	return nil, err
-	// }
 	f := &Field[T]{
 		vals:       make([]T, width*height),
 		renderbuf:  make([]uint32, width*height),
 		valToColor: toColor,
 		width:      width,
 		height:     height,
-		//tex:        t,
 	}
-	//f.Render(r)
 	return f, nil
-
 }
 
 func (f *Field[T]) Clear() {
@@ -44,10 +37,7 @@ func (f *Field[T]) Get(x, y int) *T {
 	return &f.vals[x+y*f.width]
 }
 
-//var updates int32
-
 func (f *Field[T]) Update(x, y int) {
-	//atomic.AddInt32(&updates, 1)
 	f.renderbuf[x+y*f.width] = f.valToColor(&f.vals[x+y*f.width])
 }
 
@@ -58,7 +48,6 @@ func (f *Field[T]) UpdateAll() {
 }
 
 func (f *Field[T]) Render(r *ebiten.Image) error {
-
 	var bbs []byte
 	sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&bbs))
 	sliceHeader.Cap = int(len(f.renderbuf) * 4)
