@@ -2,7 +2,7 @@
 
 package main
 
-const antsceneFontSize = 20
-const antsceneFontSpace = 25
-const optsceneFontSize = 15
-const optsceneFontSpace = 20
+const antsceneFontSize = 22
+const antsceneFontSpace = 28
+const optsceneFontSize = 18
+const optsceneFontSpace = 24

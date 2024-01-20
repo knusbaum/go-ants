@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"image/color"
+	"strings"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/examples/resources/fonts"
@@ -184,16 +185,33 @@ func (s *OptScene) Draw(g *Game[GameState], st *GameState, screen *ebiten.Image)
 	y := optsceneFontSpace
 	const step = optsceneFontSpace
 	text.Draw(screen, "Up/Down - Change option, Left/Right - Change Value", s.font, 10, y, color.White)
-
 	y += step
+	text.Draw(screen, "Jake likes the flashing lines", s.font, 10, y, color.White)
+
+	y += step * 3
+	var c1 color.Color = color.RGBA{R: 0xff, G: 0xff, B: 0xff, A: 0xff}
+	var c2 color.Color = color.RGBA{R: 0xaa, G: 0xaa, B: 0xaa, A: 0xff} //color.White
+	var c color.Color = c1
 	for oi := range s.opts {
-		var c color.Color = color.White
 		if oi == s.index {
 			c = color.RGBA{R: 0x55, G: 0xFF, B: 0xff, A: 0xFF}
+			doLine(0, y+2, st.width/2, y+2, func(x, y int) {
+				screen.Set(x, y, c)
+			})
 		}
-		text.Draw(screen, fmt.Sprintf("%s", s.opts[oi].name), s.font, 10, y, c)
-		text.Draw(screen, fmt.Sprintf("%v", s.opts[oi].value), s.font, 600, y, c)
+		text.Draw(screen, fmt.Sprintf("%s", strings.ToUpper(s.opts[oi].name)), s.font, 10, y, c)
+		text.Draw(screen, fmt.Sprintf("%v", strings.ToUpper(s.opts[oi].value)), s.font, 450, y, c)
 		y += step
+		// if oi%2 == 1 {
+		// 	c = c1
+		// } else {
+		// 	c = c2
+		// }
+		if c == c1 {
+			c = c2
+		} else {
+			c = c1
+		}
 	}
 
 	texts := []string{
@@ -214,7 +232,7 @@ func (s *OptScene) Draw(g *Game[GameState], st *GameState, screen *ebiten.Image)
 
 	y += step
 	for oi := range texts {
-		text.Draw(screen, fmt.Sprintf("%s", texts[oi]), s.font, 10, y, color.White)
+		text.Draw(screen, strings.ToUpper(fmt.Sprintf("%s", texts[oi])), s.font, 10, y, color.White)
 		y += step
 	}
 }

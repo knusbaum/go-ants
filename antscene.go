@@ -606,7 +606,8 @@ func (as *AntScene) Update(g *Game[GameState], st *GameState) error {
 // }
 
 func (as *AntScene) DrawUnder(g *Game[GameState], _ *GameState) bool {
-	return true
+	return false
+	//return true
 }
 
 // func (as *AntScene) Render(g *Game[GameState], r *sdl.Renderer, s *GameState) error {
