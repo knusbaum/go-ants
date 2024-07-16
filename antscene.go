@@ -7,6 +7,8 @@ import (
 	"math"
 	"os"
 	"runtime"
+	"slices"
+	"sort"
 	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -34,6 +36,12 @@ const pheromoneMax = 8191
 const pherShift = 5 //(2^13 = 8192), meaning 8192 is within 13 bits range, We want to shift that to 8 bits, so shift 5 out.
 const marker = 5000
 
+// DrawData is passed to draw workers, which will draw ants to screen.
+type DrawData struct {
+	screen *ebiten.Image
+	ants   []Ant
+}
+
 type AntScene struct {
 	st             *GameState
 	ants           []Ant
@@ -53,6 +61,9 @@ type AntScene struct {
 
 	pherwg            sync.WaitGroup
 	pherworkerTrigger []chan struct{}
+
+	drawwg         sync.WaitGroup
+	drawworkerData []chan DrawData
 }
 
 type gridwork struct {
@@ -177,6 +188,8 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 		g.state.leftmode = (g.state.leftmode + 1) % end
 	} else if inpututil.IsKeyJustPressed(ebiten.KeyZ) {
 		g.state.renderAnts = !g.state.renderAnts
+	} else if inpututil.IsKeyJustPressed(ebiten.KeyQ) {
+		g.state.sorttype = (g.state.sorttype + 1) % sortend
 	}
 
 	distance := func(x0, y0, x1, y1 int) int {
@@ -341,7 +354,7 @@ func drawAntTextures(c color.Color) []*ebiten.Image {
 }
 
 func (as *AntScene) Init(g *Game[GameState], st *GameState) error {
-
+	as.st = st
 	as.pause = true
 	f, err := NewField[gridspot](g.width, g.height, as.renderGridspot)
 	if err != nil {
@@ -413,6 +426,33 @@ func (as *AntScene) Init(g *Game[GameState], st *GameState) error {
 				as.pherwg.Done()
 			}
 		}(i)
+
+		dc := make(chan DrawData)
+		as.drawworkerData = append(as.drawworkerData, dc)
+		go func() {
+			for d := range dc {
+				var dio ebiten.DrawImageOptions
+				var lastx, lasty int
+				for a := range d.ants {
+					if as.ants[a].pos.x == lastx && as.ants[a].pos.y == lasty {
+						continue
+					}
+					lastx, lasty = as.ants[a].pos.x, as.ants[a].pos.y
+					if as.ants[a].food > 0 {
+						im := as.fullTextures[as.ants[a].dir]
+						dio.GeoM = ebiten.GeoM{}
+						dio.GeoM.Translate(float64(as.ants[a].pos.x-(antTexSize/2)), float64(as.ants[a].pos.y-(antTexSize/2)))
+						d.screen.DrawImage(im, &dio)
+					} else {
+						im := as.textures[as.ants[a].dir]
+						dio.GeoM = ebiten.GeoM{}
+						dio.GeoM.Translate(float64(as.ants[a].pos.x-(antTexSize/2)), float64(as.ants[a].pos.y-(antTexSize/2)))
+						d.screen.DrawImage(im, &dio)
+					}
+				}
+				as.drawwg.Done()
+			}
+		}()
 
 	}
 
@@ -615,6 +655,111 @@ func (as *AntScene) DrawUnder(g *Game[GameState], _ *GameState) bool {
 	//return true
 }
 
+type sortYX []Ant
+
+func (s sortYX) Len() int {
+	return len([]Ant(s))
+}
+func (s sortYX) Less(i, j int) bool {
+	if []Ant(s)[i].pos.y < []Ant(s)[j].pos.y {
+		return true
+	}
+	return []Ant(s)[i].pos.x < []Ant(s)[j].pos.x
+}
+func (s sortYX) Swap(i, j int) {
+	sl := []Ant(s)
+	sl[i], sl[j] = sl[j], sl[i]
+}
+
+func qsortAnts(a []Ant) {
+	if len(a) < 2 {
+		return
+	}
+	left, right := 0, len(a)-1
+	pivot := len(a) / 2
+	a[pivot], a[right] = a[right], a[pivot]
+	for i := range a {
+		if a[i].pos.y < a[right].pos.y || (a[i].pos.y == a[right].pos.y && a[i].pos.x < a[right].pos.x) {
+			a[i], a[left] = a[left], a[i]
+			left++
+		}
+	}
+	a[left], a[right] = a[right], a[left]
+	qsortAnts(a[:left])
+	qsortAnts(a[left+1:])
+}
+
+func mergeSortAnts(a []Ant) []Ant {
+	if len(a) <= 1 {
+		return a
+	}
+	left := mergeSortAnts(a[:len(a)/2])
+	right := mergeSortAnts(a[(len(a) / 2):])
+	return merge(left, right)
+}
+
+func merge(as, bs []Ant) []Ant {
+	//fmt.Printf("Merging as[%d] bs[%d]\n", len(as), len(bs))
+	rs := make([]Ant, 0, len(as)+len(bs))
+	// if len(space) != len(as)+len(bs) {
+	// 	panic(fmt.Sprintf("BAD SPACE A: %d, B: %d, SPACE: %d", len(as), len(bs), len(space)))
+	// }
+	// space = space[:0]
+	for len(as) > 0 && len(bs) > 0 {
+		if as[0].pos.y < bs[0].pos.y || (as[0].pos.y == bs[0].pos.y && as[0].pos.x < bs[0].pos.x) {
+			rs = append(rs, as[0])
+			//space = append(space, as[0])
+			as = as[1:]
+		} else {
+			rs = append(rs, bs[0])
+			//space = append(space, bs[0])
+			bs = bs[1:]
+		}
+	}
+	if len(as) > 0 {
+		rs = append(rs, as...)
+		//space = append(space, as...)
+	} else if len(bs) > 0 {
+		//space = append(space, bs...)
+		rs = append(rs, bs...)
+	}
+	//fmt.Printf("Merged into len(%d)\n", len(rs))
+	return rs
+}
+
+func cmpAnt(a, b Ant) int {
+	//ay := a.pos.y << 8
+	//by := b.pos.y << 8
+
+	return ((a.pos.y - b.pos.y) << 32) + (a.pos.x - b.pos.x)
+
+	// if a.pos.y < b.pos.y {
+	// 	return -1
+	// } else if a.pos.y == b.pos.y {
+	// 	if a.pos.x < b.pos.x {
+	// 		return -1
+	// 	} else if a.pos.x == b.pos.x {
+	// 		return 0
+	// 	}
+	// }
+	// return 1
+}
+
+var chunksize = 1
+var maxperchunk uint8 = 8
+var cycle = 0
+var markers []uint8 = make([]uint8, WIDTH*HEIGHT)
+
+func memsetRepeat(a []uint8, v uint8) {
+	if len(a) == 0 {
+		return
+	}
+	a[0] = v
+	for bp := 1; bp < len(a); bp *= 2 {
+		copy(a[bp:], a[:bp])
+	}
+}
+
 // func (as *AntScene) Render(g *Game[GameState], r *sdl.Renderer, s *GameState) error {
 func (as *AntScene) Draw(g *Game[GameState], st *GameState, screen *ebiten.Image) {
 	err := as.field.Render(screen)
@@ -623,26 +768,135 @@ func (as *AntScene) Draw(g *Game[GameState], st *GameState, screen *ebiten.Image
 	}
 
 	if st.renderAnts {
-		var dio ebiten.DrawImageOptions
-		for a := range as.ants {
-			if as.ants[a].food > 0 {
-				im := as.fullTextures[as.ants[a].dir]
-				dio.GeoM = ebiten.GeoM{}
-				dio.GeoM.Translate(float64(as.ants[a].pos.x-(antTexSize/2)), float64(as.ants[a].pos.y-(antTexSize/2)))
-				screen.DrawImage(im, &dio)
-			} else {
-				im := as.textures[as.ants[a].dir]
-				dio.GeoM = ebiten.GeoM{}
-				dio.GeoM.Translate(float64(as.ants[a].pos.x-(antTexSize/2)), float64(as.ants[a].pos.y-(antTexSize/2)))
-				screen.DrawImage(im, &dio)
+		if st.parallel {
+			afps := ebiten.ActualFPS()
+			if afps < 30 {
+				if maxperchunk == 1 && chunksize < 32 {
+					chunksize *= 2
+					maxperchunk *= 4
+				}
+				if maxperchunk > 1 {
+					cycle -= 1
+					if cycle <= -30 || afps < 15 {
+						cycle = 0
+						maxperchunk -= 1
+					}
+				}
+			} else if afps > 55 {
+				if maxperchunk == 8 {
+					if chunksize > 1 {
+						chunksize = chunksize / 2
+						maxperchunk = maxperchunk / 4
+					}
+				} else if maxperchunk < 8 {
+					cycle += 1
+					if cycle == 30 {
+						cycle = 0
+						maxperchunk++
+					}
+				}
+			}
+			// sort.Sort(sortYX(as.ants))
+
+			// // antsPerWorker := len(as.ants) / len(as.drawworkerData)
+			// // as.drawwg.Add(len(as.drawworkerData))
+			// // for i, w := range as.drawworkerData {
+			// // 	fmt.Printf("Drawing [%d:%d] of ants[%d]\n", i*antsPerWorker, ((i + 1) * antsPerWorker), len(as.ants))
+			// // 	w <- DrawData{
+			// // 		screen: screen,
+			// // 		ants:   as.ants[i*antsPerWorker : ((i + 1) * antsPerWorker)],
+			// // 	}
+			// // }
+			// // as.drawwg.Wait()
+			// as.drawwg.Add(1)
+			// as.drawworkerData[0] <- DrawData{
+			// 	screen: screen,
+			// 	ants:   as.ants,
+			// }
+			// as.drawwg.Wait()
+			var dio ebiten.DrawImageOptions
+			switch st.sorttype {
+			case qsort:
+				qsortAnts(as.ants)
+			case mergesort:
+				as.ants = mergeSortAnts(as.ants)
+			case stdsort:
+				sort.Sort(sortYX(as.ants))
+			case slicesort:
+				slices.SortFunc(as.ants, cmpAnt)
+			}
+			//qsortAnts(as.ants)
+			//newants := make([]Ant, len(as.ants))
+			//as.ants = mergeSortAnts(as.ants, newants)
+			//slices.SortFunc(as.ants, cmpAnt)
+			//panic("OOF")
+			//const chunksize = 4
+			//const maxperchunk = 6
+			//markers := make([]uint8, (WIDTH/chunksize)*(HEIGHT/chunksize)+chunksize+1)
+			memsetRepeat(markers, 0)
+			var lasty, lastx int
+			mask := ^(chunksize - 1)
+			for a := range as.ants {
+				// if as.ants[a].pos.y == lasty && as.ants[a].pos.x == lastx {
+				// 	continue
+				// }
+				if st.sorttype == none {
+					//if markers[((as.ants[a].pos.y/chunksize)*(WIDTH/chunksize))+(as.ants[a].pos.x/chunksize)] >= maxperchunk {
+					loc := ((as.ants[a].pos.y & mask) * WIDTH) + (as.ants[a].pos.x & 0xfffffffe)
+					if markers[loc] >= maxperchunk {
+						continue
+					}
+					//markers[((as.ants[a].pos.y/chunksize)*(WIDTH/chunksize))+(as.ants[a].pos.x/chunksize)] += 1
+					markers[loc] += 1
+					//if rand.Intn(5) < 4 {
+					//	continue
+					//}
+					//if as.ants[a].pos.x%3+as.ants[a].pos.y%3 != 0 {
+					//	continue
+					//}
+				} else {
+					if as.ants[a].pos.y == lasty && as.ants[a].pos.x-lastx < 5 {
+						continue
+					}
+					lasty, lastx = as.ants[a].pos.y, as.ants[a].pos.x
+				}
+
+				if as.ants[a].food > 0 {
+					im := as.fullTextures[as.ants[a].dir]
+					dio.GeoM = ebiten.GeoM{}
+					dio.GeoM.Translate(float64(as.ants[a].pos.x-(antTexSize/2)), float64(as.ants[a].pos.y-(antTexSize/2)))
+					screen.DrawImage(im, &dio)
+				} else {
+					im := as.textures[as.ants[a].dir]
+					dio.GeoM = ebiten.GeoM{}
+					dio.GeoM.Translate(float64(as.ants[a].pos.x-(antTexSize/2)), float64(as.ants[a].pos.y-(antTexSize/2)))
+					screen.DrawImage(im, &dio)
+				}
+			}
+		} else {
+			var dio ebiten.DrawImageOptions
+			for a := range as.ants {
+				if as.ants[a].food > 0 {
+					im := as.fullTextures[as.ants[a].dir]
+					dio.GeoM = ebiten.GeoM{}
+					dio.GeoM.Translate(float64(as.ants[a].pos.x-(antTexSize/2)), float64(as.ants[a].pos.y-(antTexSize/2)))
+					screen.DrawImage(im, &dio)
+				} else {
+					im := as.textures[as.ants[a].dir]
+					dio.GeoM = ebiten.GeoM{}
+					dio.GeoM.Translate(float64(as.ants[a].pos.x-(antTexSize/2)), float64(as.ants[a].pos.y-(antTexSize/2)))
+					screen.DrawImage(im, &dio)
+				}
 			}
 		}
+		//n := len(as.drawworkerData)
 	}
-	msg := fmt.Sprintf("FPS: %02.f, Ticks/Sec: %0.2f, Draw Radius: %d, Hive Life: %d, Ants: %d, Brush: %s",
-		ebiten.ActualFPS(), ebiten.ActualTPS(), st.drawradius, as.homelife, len(as.ants), as.st.leftmode)
+	msg := fmt.Sprintf("FPS: %02.f, Ticks/Sec: %0.2f, Draw Radius: %d, Hive Life: %d, Ants: %d, Brush: %s, Sort: %s",
+		ebiten.ActualFPS(), ebiten.ActualTPS(), st.drawradius, as.homelife, len(as.ants), as.st.leftmode, st.sorttype)
 	start := antsceneFontSize * 2
 	text.Draw(screen, msg, mplusNormalFont, 10, start, color.White)
 	text.Draw(screen, "(M) menu", mplusNormalFont, 10, start+antsceneFontSpace, color.White)
+	text.Draw(screen, fmt.Sprintf("maxperchunk: %d, chunksize: %d", maxperchunk, chunksize), mplusNormalFont, 10, start+(antsceneFontSpace*2), color.White)
 	return
 }
 
