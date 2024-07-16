@@ -30,14 +30,9 @@ type gridspot struct {
 }
 
 const antTexSize = 5
-
-// const foodcount = 10
 const pheromoneMax = 8191
 const pherShift = 5 //(2^13 = 8192), meaning 8192 is within 13 bits range, We want to shift that to 8 bits, so shift 5 out.
 const marker = 5000
-
-// const fadedivisor = 700 // bigger number, slower pheromone fade.
-//const antfadedivisor = 600
 
 type AntScene struct {
 	st             *GameState
@@ -173,6 +168,15 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 		as.st.drawradius++
 	} else if inpututil.IsKeyJustPressed(ebiten.KeyDown) {
 		as.st.drawradius--
+	} else if inpututil.IsKeyJustPressed(ebiten.KeyLeft) {
+		g.state.leftmode -= 1
+		if g.state.leftmode < 0 {
+			g.state.leftmode = end - 1
+		}
+	} else if inpututil.IsKeyJustPressed(ebiten.KeyRight) {
+		g.state.leftmode = (g.state.leftmode + 1) % end
+	} else if inpututil.IsKeyJustPressed(ebiten.KeyZ) {
+		g.state.renderAnts = !g.state.renderAnts
 	}
 
 	distance := func(x0, y0, x1, y1 int) int {
@@ -201,7 +205,7 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 		}
 	}
 
-	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
+	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) && g.state.leftmode == wall {
 		mx, my := ebiten.CursorPosition()
 		//if mx != as.mousePX || my != as.mousePY {
 		doLine(mx, my, as.mousePX, as.mousePY, func(cx, cy int) {
@@ -216,7 +220,8 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 			})
 		})
 		//}
-	} else if ebiten.IsMouseButtonPressed(ebiten.MouseButtonRight) {
+	} else if ebiten.IsMouseButtonPressed(ebiten.MouseButtonRight) ||
+		(ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) && g.state.leftmode == erase) {
 		mx, my := ebiten.CursorPosition()
 		//if mx != as.mousePX || my != as.mousePY {
 		doLine(mx, my, as.mousePX, as.mousePY, func(cx, cy int) {
@@ -228,7 +233,8 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 			})
 		})
 		//}
-	} else if ebiten.IsMouseButtonPressed(ebiten.MouseButtonMiddle) {
+	} else if ebiten.IsMouseButtonPressed(ebiten.MouseButtonMiddle) ||
+		(ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) && g.state.leftmode == food) {
 		mx, my := ebiten.CursorPosition()
 		//if mx != as.mousePX || my != as.mousePY {
 		doLine(mx, my, as.mousePX, as.mousePY, func(cx, cy int) {
@@ -345,14 +351,14 @@ func (as *AntScene) Init(g *Game[GameState], st *GameState) error {
 
 	as.textures = make([]*ebiten.Image, int(END))
 	as.fullTextures = make([]*ebiten.Image, int(END))
-	for i := N; i < END; i++ {
-		// as.textures[i] = ebiten.NewImage(antTexSize, antTexSize)
-		// as.textures[i].Fill(color.RGBA{R: 0xc3, G: 0x5b, B: 0x31, A: 0xff})
-		// as.fullTextures[i] = ebiten.NewImage(antTexSize, antTexSize)
-		// as.fullTextures[i].Fill(color.RGBA{R: 0xc3, G: 0x5b, B: 0xff, A: 0xff})
-		as.textures = drawAntTextures(color.RGBA{R: 0xc3, G: 0x5b, B: 0x31, A: 0xff})
-		as.fullTextures = drawAntTextures(color.RGBA{R: 0xc3, G: 0x5b, B: 0xff, A: 0xff})
-	}
+	//for i := N; i < END; i++ {
+	// as.textures[i] = ebiten.NewImage(antTexSize, antTexSize)
+	// as.textures[i].Fill(color.RGBA{R: 0xc3, G: 0x5b, B: 0x31, A: 0xff})
+	// as.fullTextures[i] = ebiten.NewImage(antTexSize, antTexSize)
+	// as.fullTextures[i].Fill(color.RGBA{R: 0xc3, G: 0x5b, B: 0xff, A: 0xff})
+	as.textures = drawAntTextures(color.RGBA{R: 0xc3, G: 0x5b, B: 0x31, A: 0xff})
+	as.fullTextures = drawAntTextures(color.RGBA{R: 0xc3, G: 0x5b, B: 0xff, A: 0xff})
+	//}
 
 	for y := 0; y < g.height; y++ {
 		for x := 0; x < g.width; x++ {
@@ -429,7 +435,6 @@ func (as *AntScene) UpdateAntPartial(start, end int) {
 	if end > len(as.ants) {
 		end = len(as.ants)
 	}
-	//fmt.Printf("UPDATING %d - %d\n", start, end)
 	for a := range as.ants[start:end] {
 		as.ants[start+a].Update(as)
 	}
@@ -617,22 +622,24 @@ func (as *AntScene) Draw(g *Game[GameState], st *GameState, screen *ebiten.Image
 		panic(err)
 	}
 
-	var dio ebiten.DrawImageOptions
-	for a := range as.ants {
-		if as.ants[a].food > 0 {
-			im := as.fullTextures[as.ants[a].dir]
-			dio.GeoM = ebiten.GeoM{}
-			dio.GeoM.Translate(float64(as.ants[a].pos.x-(antTexSize/2)), float64(as.ants[a].pos.y-(antTexSize/2)))
-			screen.DrawImage(im, &dio)
-		} else {
-			im := as.textures[as.ants[a].dir]
-			dio.GeoM = ebiten.GeoM{}
-			dio.GeoM.Translate(float64(as.ants[a].pos.x-(antTexSize/2)), float64(as.ants[a].pos.y-(antTexSize/2)))
-			screen.DrawImage(im, &dio)
+	if st.renderAnts {
+		var dio ebiten.DrawImageOptions
+		for a := range as.ants {
+			if as.ants[a].food > 0 {
+				im := as.fullTextures[as.ants[a].dir]
+				dio.GeoM = ebiten.GeoM{}
+				dio.GeoM.Translate(float64(as.ants[a].pos.x-(antTexSize/2)), float64(as.ants[a].pos.y-(antTexSize/2)))
+				screen.DrawImage(im, &dio)
+			} else {
+				im := as.textures[as.ants[a].dir]
+				dio.GeoM = ebiten.GeoM{}
+				dio.GeoM.Translate(float64(as.ants[a].pos.x-(antTexSize/2)), float64(as.ants[a].pos.y-(antTexSize/2)))
+				screen.DrawImage(im, &dio)
+			}
 		}
 	}
-	msg := fmt.Sprintf("FPS: %02.f, Ticks/Sec: %0.2f, Draw Radius: %d, Hive Life: %d, Ants: %d",
-		ebiten.ActualFPS(), ebiten.ActualTPS(), st.drawradius, as.homelife, len(as.ants))
+	msg := fmt.Sprintf("FPS: %02.f, Ticks/Sec: %0.2f, Draw Radius: %d, Hive Life: %d, Ants: %d, Brush: %s",
+		ebiten.ActualFPS(), ebiten.ActualTPS(), st.drawradius, as.homelife, len(as.ants), as.st.leftmode)
 	start := antsceneFontSize * 2
 	text.Draw(screen, msg, mplusNormalFont, 10, start, color.White)
 	text.Draw(screen, "(M) menu", mplusNormalFont, 10, start+antsceneFontSpace, color.White)
@@ -642,15 +649,6 @@ func (as *AntScene) Draw(g *Game[GameState], st *GameState, screen *ebiten.Image
 func (as *AntScene) RenderBelow() bool {
 	return true
 }
-
-// func (as *AntScene) Destroy() {
-// }
-
-// // Layout takes the outside size (e.g., the window size) and returns the (logical) screen size.
-// // If you don't have to adjust the screen size with the outside size, just return a fixed size.
-// func (as *AntScene) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
-// 	return WIDTH, HEIGHT
-// }
 
 func absi(i int) int {
 	if i < 0 {

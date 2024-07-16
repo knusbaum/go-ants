@@ -181,7 +181,11 @@ func (a *Ant) Line(an *AntScene, d direction, size int) gridspot {
 	}
 	switch d {
 	case N:
-		for y := a.pos.y; y > a.pos.y-size && y > 0; y-- {
+		for y := a.pos.y; y > a.pos.y-size; y-- {
+			if y < 0 {
+				pt.Wall = true
+				break
+			}
 			if !addspot(an.field.Get(a.pos.x, y)) {
 				break
 			}
@@ -191,6 +195,7 @@ func (a *Ant) Line(an *AntScene, d direction, size int) gridspot {
 			y := a.pos.y - i
 			x := a.pos.x + i
 			if y < 0 || x >= an.field.width {
+				pt.Wall = true
 				break
 			}
 			if !addspot(an.field.Get(x, y)) {
@@ -198,7 +203,11 @@ func (a *Ant) Line(an *AntScene, d direction, size int) gridspot {
 			}
 		}
 	case E:
-		for x := a.pos.x; x < a.pos.x+size && x < an.field.width; x++ {
+		for x := a.pos.x; x < a.pos.x+size; x++ {
+			if x >= an.field.width {
+				pt.Wall = true
+				break
+			}
 			if !addspot(an.field.Get(x, a.pos.y)) {
 				break
 			}
@@ -208,6 +217,7 @@ func (a *Ant) Line(an *AntScene, d direction, size int) gridspot {
 			y := a.pos.y + i
 			x := a.pos.x + i
 			if y >= an.field.height || x >= an.field.width {
+				pt.Wall = true
 				break
 			}
 			if !addspot(an.field.Get(x, y)) {
@@ -215,7 +225,11 @@ func (a *Ant) Line(an *AntScene, d direction, size int) gridspot {
 			}
 		}
 	case S:
-		for y := a.pos.y; y < a.pos.y+size && y < an.field.height; y++ {
+		for y := a.pos.y; y < a.pos.y+size; y++ {
+			if y >= an.field.height {
+				pt.Wall = true
+				break
+			}
 			if !addspot(an.field.Get(a.pos.x, y)) {
 				break
 			}
@@ -225,6 +239,7 @@ func (a *Ant) Line(an *AntScene, d direction, size int) gridspot {
 			y := a.pos.y + i
 			x := a.pos.x - i
 			if y >= an.field.height || x < 0 {
+				pt.Wall = true
 				break
 			}
 			if !addspot(an.field.Get(x, y)) {
@@ -232,7 +247,11 @@ func (a *Ant) Line(an *AntScene, d direction, size int) gridspot {
 			}
 		}
 	case W:
-		for x := a.pos.x; x > a.pos.x-size && x > 0; x-- {
+		for x := a.pos.x; x > a.pos.x-size; x-- {
+			if x < 0 {
+				pt.Wall = true
+				break
+			}
 			if !addspot(an.field.Get(x, a.pos.y)) {
 				break
 			}
@@ -242,6 +261,7 @@ func (a *Ant) Line(an *AntScene, d direction, size int) gridspot {
 			y := a.pos.y - i
 			x := a.pos.x - i
 			if y < 0 || x < 0 {
+				pt.Wall = true
 				break
 			}
 			if !addspot(an.field.Get(x, y)) {
@@ -381,6 +401,7 @@ func (a *Ant) Update(as *AntScene) bool {
 		spot := as.field.Get(a.pos.x, a.pos.y)
 		if spot.FoodPher > a.marker {
 			a.marker = spot.FoodPher
+			a.marker -= (a.marker / antFadeDivisor(as.st.fadedivisor)) + 1
 		} else {
 			spot.FoodPher = a.marker
 			a.marker -= (a.marker / antFadeDivisor(as.st.fadedivisor)) + 1
@@ -392,6 +413,7 @@ func (a *Ant) Update(as *AntScene) bool {
 		spot := as.field.Get(a.pos.x, a.pos.y)
 		if spot.HomePher > a.marker {
 			a.marker = spot.HomePher
+			a.marker -= (a.marker / antFadeDivisor(as.st.fadedivisor)) + 1
 		} else {
 			spot.HomePher = a.marker
 			a.marker -= (a.marker / antFadeDivisor(as.st.fadedivisor)) + 1
@@ -423,12 +445,13 @@ func (a *Ant) Move(an *AntScene) {
 		// left := a.SumOctant(an, a.dir.Left(1), 50)
 		// right := a.SumOctant(an, a.dir.Right(1), 50)
 
-		const sight = 50
-		straight := a.Line(an, a.dir, sight)
-		left := a.Line(an, a.dir.Left(1), sight)
-		lleft := a.Line(an, a.dir.Left(2), sight)
-		right := a.Line(an, a.dir.Right(1), sight)
-		rright := a.Line(an, a.dir.Right(2), sight)
+		//const sight = 50
+		//const sight = 10
+		straight := a.Line(an, a.dir, an.st.sight)
+		left := a.Line(an, a.dir.Left(1), an.st.sight)
+		lleft := a.Line(an, a.dir.Left(2), an.st.sight)
+		right := a.Line(an, a.dir.Right(1), an.st.sight)
+		rright := a.Line(an, a.dir.Right(2), an.st.sight)
 
 		if straight.FoodPher < 0 || right.FoodPher < 0 || left.FoodPher < 0 {
 			panic(fmt.Sprintf("Ant(%d,%d,%d): Less that zero: straight: %#v, left: %#v, right: %#v, lleft: %#v, rright: %#v",
@@ -463,9 +486,18 @@ func (a *Ant) Move(an *AntScene) {
 			}
 		} else {
 			if an.st.antisocial {
-				straightPower := straight.HomePher - (straight.FoodPher)
-				leftPower := left.HomePher - (left.FoodPher)
-				rightPower := right.HomePher - (right.FoodPher)
+				if straight.Wall {
+					straight.HomePher += pheromoneMax * an.st.sight
+				}
+				if left.Wall {
+					left.HomePher += pheromoneMax * an.st.sight
+				}
+				if right.Wall {
+					right.HomePher += pheromoneMax * an.st.sight
+				}
+				straightPower := straight.HomePher - (straight.FoodPher * 2)
+				leftPower := left.HomePher - (left.FoodPher * 2)
+				rightPower := right.HomePher - (right.FoodPher * 2)
 
 				if rightPower < straightPower && rightPower < leftPower {
 					a.dir = a.dir.Right(1)

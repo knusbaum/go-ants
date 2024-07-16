@@ -13,7 +13,9 @@ import (
 const (
 	WIDTH  = 1280
 	HEIGHT = 720
-	nants  = 3000
+	//	WIDTH  = 2256
+	// HEIGHT = 1504
+	nants = 3000
 )
 
 // type LineScene struct {
@@ -103,7 +105,8 @@ func main() {
 	ebiten.SetWindowTitle("Your game's title")
 
 	g := NewGame[GameState](WIDTH, HEIGHT, NewGameState(WIDTH, HEIGHT)) //&Game[GameState]{}
-	as := &AntScene{homelife: 3000 * 10000}
+	//as := &AntScene{homelife: 3000 * 10000}
+	as := &AntScene{homelife: 3000 * 10000 * 100}
 	err = g.PushScene(as)
 	if err != nil {
 		log.Fatal(err)

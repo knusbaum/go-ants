@@ -127,6 +127,12 @@ func makeTexts(st *GameState) []opt {
 			right: withProgressiveDuration(func(x int) { st.antlife += x }),
 		},
 		{
+			name:  "Ant Sight Distance",
+			value: fmt.Sprintf("%d", st.sight),
+			left:  withProgressiveDuration(func(x int) { st.sight -= x }),
+			right: withProgressiveDuration(func(x int) { st.sight += x }),
+		},
+		{
 			name:  "Food Life (Life from 1 food)",
 			value: fmt.Sprintf("%d", st.foodlife),
 			left:  withProgressiveDuration(func(x int) { st.foodlife -= x }),
@@ -215,6 +221,10 @@ func (s *OptScene) Draw(g *Game[GameState], st *GameState, screen *ebiten.Image)
 	}
 
 	texts := []string{
+		"Controls:",
+		"Left Click - Brush Stroke",
+		"Middle Click - Draw Food",
+		"Right Click - Erase",
 		"P: Toggle Pheromone Rendering",
 		"G: Toggle Green Pheromone Rendering",
 		"R: Toggle Red Pheromone Rendering",
@@ -227,7 +237,8 @@ func (s *OptScene) Draw(g *Game[GameState], st *GameState, screen *ebiten.Image)
 		"F: Fill the grid with wall",
 		"M: This menu",
 		"Space: Pause",
-		"Up/Down: Increase and decrease draw radius",
+		"Up/Down: Increase and decrease brush radius",
+		"Left/Right: Change the current brush",
 	}
 
 	y += step
