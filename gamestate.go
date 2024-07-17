@@ -22,33 +22,33 @@ func (m clickmode) String() string {
 	}
 }
 
-type sorttype int
+// type sorttype int
 
-const (
-	none sorttype = iota
-	qsort
-	slicesort
-	sortend
-	mergesort
-	stdsort
-)
+// const (
+// 	none sorttype = iota
+// 	qsort
+// 	slicesort
+// 	sortend
+// 	mergesort
+// 	stdsort
+// )
 
-func (t sorttype) String() string {
-	switch t {
-	case none:
-		return "None"
-	case qsort:
-		return "Quicksort"
-	case mergesort:
-		return "Mergesort"
-	case stdsort:
-		return "sort.Sort"
-	case slicesort:
-		return "slices.SortFunc"
-	default:
-		return "Error (UNKNOWN SORT)"
-	}
-}
+// func (t sorttype) String() string {
+// 	switch t {
+// 	case none:
+// 		return "None"
+// 	case qsort:
+// 		return "Quicksort"
+// 	case mergesort:
+// 		return "Mergesort"
+// 	case stdsort:
+// 		return "sort.Sort"
+// 	case slicesort:
+// 		return "slices.SortFunc"
+// 	default:
+// 		return "Error (UNKNOWN SORT)"
+// 	}
+// }
 
 type GameState struct {
 	width, height int
@@ -69,5 +69,6 @@ type GameState struct {
 	fadedivisor int // pheromone -= pheromone / fadedivisor // bigger number, slower fade
 	sight       int
 	leftmode    clickmode
-	sorttype    sorttype
+	//sorttype    sorttype
+	cluster bool
 }

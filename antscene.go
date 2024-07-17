@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"image/color"
 	"math"
+	"math/rand"
 	"os"
 	"runtime"
-	"slices"
-	"sort"
 	"sync"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -189,7 +188,7 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 	} else if inpututil.IsKeyJustPressed(ebiten.KeyZ) {
 		g.state.renderAnts = !g.state.renderAnts
 	} else if inpututil.IsKeyJustPressed(ebiten.KeyQ) {
-		g.state.sorttype = (g.state.sorttype + 1) % sortend
+		g.state.cluster = !g.state.cluster
 	}
 
 	distance := func(x0, y0, x1, y1 int) int {
@@ -371,6 +370,7 @@ func (as *AntScene) Init(g *Game[GameState], st *GameState) error {
 	// as.fullTextures[i].Fill(color.RGBA{R: 0xc3, G: 0x5b, B: 0xff, A: 0xff})
 	as.textures = drawAntTextures(color.RGBA{R: 0xc3, G: 0x5b, B: 0x31, A: 0xff})
 	as.fullTextures = drawAntTextures(color.RGBA{R: 0xc3, G: 0x5b, B: 0xff, A: 0xff})
+	gentiles(as)
 	//}
 
 	for y := 0; y < g.height; y++ {
@@ -746,11 +746,17 @@ func cmpAnt(a, b Ant) int {
 }
 
 var chunksize = 1
-var maxperchunk uint8 = 8
+var maxperchunk uint = 32
 var cycle = 0
-var markers []uint8 = make([]uint8, WIDTH*HEIGHT)
 
-func memsetRepeat(a []uint8, v uint8) {
+type space struct {
+	brown uint
+	blue  uint
+}
+
+var markers []space = make([]space, WIDTH*HEIGHT)
+
+func memsetRepeat(a []space, v space) {
 	if len(a) == 0 {
 		return
 	}
@@ -769,96 +775,65 @@ func (as *AntScene) Draw(g *Game[GameState], st *GameState, screen *ebiten.Image
 
 	if st.renderAnts {
 		if st.parallel {
-			afps := ebiten.ActualFPS()
-			if afps < 30 {
-				if maxperchunk == 1 && chunksize < 32 {
-					chunksize *= 2
-					maxperchunk *= 4
-				}
-				if maxperchunk > 1 {
-					cycle -= 1
-					if cycle <= -30 || afps < 15 {
-						cycle = 0
-						maxperchunk -= 1
+			if !as.pause && st.cluster {
+				afps := ebiten.ActualFPS()
+				if afps < 45 {
+					if maxperchunk == 1 && chunksize < 8 {
+						chunksize *= 2
+						maxperchunk *= 4
 					}
-				}
-			} else if afps > 55 {
-				if maxperchunk == 8 {
-					if chunksize > 1 {
-						chunksize = chunksize / 2
-						maxperchunk = maxperchunk / 4
+					if maxperchunk > 1 {
+						cycle -= 1
+						if cycle <= -30 || afps < 15 {
+							cycle = 0
+							maxperchunk -= 1
+						}
 					}
-				} else if maxperchunk < 8 {
-					cycle += 1
-					if cycle == 30 {
-						cycle = 0
-						maxperchunk++
+				} else if afps > 55 {
+					if maxperchunk == 32 {
+						if chunksize > 1 {
+							//if chunksize > 64 {
+							chunksize = chunksize / 2
+							maxperchunk = maxperchunk / 4
+						}
+					} else if maxperchunk < 32 {
+						cycle += 1
+						if cycle == 30 {
+							cycle = 0
+							maxperchunk++
+						}
 					}
 				}
 			}
-			// sort.Sort(sortYX(as.ants))
-
-			// // antsPerWorker := len(as.ants) / len(as.drawworkerData)
-			// // as.drawwg.Add(len(as.drawworkerData))
-			// // for i, w := range as.drawworkerData {
-			// // 	fmt.Printf("Drawing [%d:%d] of ants[%d]\n", i*antsPerWorker, ((i + 1) * antsPerWorker), len(as.ants))
-			// // 	w <- DrawData{
-			// // 		screen: screen,
-			// // 		ants:   as.ants[i*antsPerWorker : ((i + 1) * antsPerWorker)],
-			// // 	}
-			// // }
-			// // as.drawwg.Wait()
-			// as.drawwg.Add(1)
-			// as.drawworkerData[0] <- DrawData{
-			// 	screen: screen,
-			// 	ants:   as.ants,
+			//
+			// switch st.sorttype {
+			// case qsort:
+			// 	qsortAnts(as.ants)
+			// case mergesort:
+			// 	as.ants = mergeSortAnts(as.ants)
+			// case stdsort:
+			// 	sort.Sort(sortYX(as.ants))
+			// case slicesort:
+			// 	slices.SortFunc(as.ants, cmpAnt)
 			// }
-			// as.drawwg.Wait()
-			var dio ebiten.DrawImageOptions
-			switch st.sorttype {
-			case qsort:
-				qsortAnts(as.ants)
-			case mergesort:
-				as.ants = mergeSortAnts(as.ants)
-			case stdsort:
-				sort.Sort(sortYX(as.ants))
-			case slicesort:
-				slices.SortFunc(as.ants, cmpAnt)
-			}
-			//qsortAnts(as.ants)
-			//newants := make([]Ant, len(as.ants))
-			//as.ants = mergeSortAnts(as.ants, newants)
-			//slices.SortFunc(as.ants, cmpAnt)
-			//panic("OOF")
-			//const chunksize = 4
-			//const maxperchunk = 6
-			//markers := make([]uint8, (WIDTH/chunksize)*(HEIGHT/chunksize)+chunksize+1)
-			memsetRepeat(markers, 0)
-			var lasty, lastx int
+			//if st.cluster {
+			//memsetRepeat(markers, space{})
+			//}
+			//var lasty, lastx int
 			mask := ^(chunksize - 1)
+			var dio ebiten.DrawImageOptions
 			for a := range as.ants {
-				// if as.ants[a].pos.y == lasty && as.ants[a].pos.x == lastx {
-				// 	continue
-				// }
-				if st.sorttype == none {
-					//if markers[((as.ants[a].pos.y/chunksize)*(WIDTH/chunksize))+(as.ants[a].pos.x/chunksize)] >= maxperchunk {
-					loc := ((as.ants[a].pos.y & mask) * WIDTH) + (as.ants[a].pos.x & 0xfffffffe)
-					if markers[loc] >= maxperchunk {
+				if st.cluster {
+					loc := ((as.ants[a].pos.y & mask) * WIDTH) + (as.ants[a].pos.x & mask)
+					if as.ants[a].food > 0 {
+						markers[loc].blue += 1
+					} else {
+						markers[loc].brown += 1
+					}
+					if markers[loc].blue+markers[loc].brown > maxperchunk {
+						//if markers[loc].brown > maxperchunk {
 						continue
 					}
-					//markers[((as.ants[a].pos.y/chunksize)*(WIDTH/chunksize))+(as.ants[a].pos.x/chunksize)] += 1
-					markers[loc] += 1
-					//if rand.Intn(5) < 4 {
-					//	continue
-					//}
-					//if as.ants[a].pos.x%3+as.ants[a].pos.y%3 != 0 {
-					//	continue
-					//}
-				} else {
-					if as.ants[a].pos.y == lasty && as.ants[a].pos.x-lastx < 5 {
-						continue
-					}
-					lasty, lastx = as.ants[a].pos.y, as.ants[a].pos.x
 				}
 
 				if as.ants[a].food > 0 {
@@ -871,6 +846,38 @@ func (as *AntScene) Draw(g *Game[GameState], st *GameState, screen *ebiten.Image
 					dio.GeoM = ebiten.GeoM{}
 					dio.GeoM.Translate(float64(as.ants[a].pos.x-(antTexSize/2)), float64(as.ants[a].pos.y-(antTexSize/2)))
 					screen.DrawImage(im, &dio)
+				}
+			}
+
+			if st.cluster {
+				var dio ebiten.DrawImageOptions
+				for y := 0; y < HEIGHT/chunksize; y++ {
+					for x := 0; x < WIDTH/chunksize; x++ {
+						loc := ((y * chunksize * WIDTH) + (x * chunksize))
+						if markers[loc].brown > maxperchunk {
+							ac := markers[loc].brown - maxperchunk
+							//ac &= 0xff
+							if ac > 255 {
+								ac = 255
+							}
+							im := tiles[chunksize][ac]
+							dio.GeoM = ebiten.GeoM{}
+							dio.GeoM.Translate(float64(x*chunksize)-3, float64(y*chunksize)-3)
+							screen.DrawImage(im, &dio)
+						}
+						if markers[loc].blue > maxperchunk {
+							ac := markers[loc].blue - maxperchunk
+							//ac &= 0xff
+							if ac > 255 {
+								ac = 255
+							}
+							im := bluetiles[chunksize][ac]
+							dio.GeoM = ebiten.GeoM{}
+							dio.GeoM.Translate(float64(x*chunksize)-3, float64(y*chunksize)-3)
+							screen.DrawImage(im, &dio)
+						}
+						markers[loc] = space{}
+					}
 				}
 			}
 		} else {
@@ -889,10 +896,9 @@ func (as *AntScene) Draw(g *Game[GameState], st *GameState, screen *ebiten.Image
 				}
 			}
 		}
-		//n := len(as.drawworkerData)
 	}
-	msg := fmt.Sprintf("FPS: %02.f, Ticks/Sec: %0.2f, Draw Radius: %d, Hive Life: %d, Ants: %d, Brush: %s, Sort: %s",
-		ebiten.ActualFPS(), ebiten.ActualTPS(), st.drawradius, as.homelife, len(as.ants), as.st.leftmode, st.sorttype)
+	msg := fmt.Sprintf("FPS: %02.f, Ticks/Sec: %0.2f, Draw Radius: %d, Hive Life: %d, Ants: %d, Brush: %s, Cluster: %v",
+		ebiten.ActualFPS(), ebiten.ActualTPS(), st.drawradius, as.homelife, len(as.ants), as.st.leftmode, st.cluster)
 	start := antsceneFontSize * 2
 	text.Draw(screen, msg, mplusNormalFont, 10, start, color.White)
 	text.Draw(screen, "(M) menu", mplusNormalFont, 10, start+antsceneFontSpace, color.White)
@@ -948,6 +954,37 @@ func doLine(x0, y0, x1, y1 int, f func(x, y int)) {
 			}
 			error = error + dx
 			y0 = y0 + sy
+		}
+	}
+}
+
+// experimental tiling
+var tiles [][]*ebiten.Image
+var bluetiles [][]*ebiten.Image
+var timg []*ebiten.Image
+
+func gentiles(as *AntScene) {
+	timg = make([]*ebiten.Image, 33)
+	tiles = make([][]*ebiten.Image, 33)
+	bluetiles = make([][]*ebiten.Image, 33)
+	for i := 1; i < 64; i *= 2 {
+		tiles[i] = make([]*ebiten.Image, 256)
+		bluetiles[i] = make([]*ebiten.Image, 256)
+		timg[i] = ebiten.NewImage(i, i)
+		timg[i].Fill(color.RGBA{R: 0xc3, G: 0x5b, B: 0x31, A: 0xff})
+		for n := 0; n < 256; n++ {
+			im := ebiten.NewImage(i+6, i+6)
+			blim := ebiten.NewImage(i+6, i+6)
+			for k := 0; k < n; k++ {
+				var dio ebiten.DrawImageOptions
+				dio.GeoM.Translate(float64(rand.Intn(i)+3), float64(rand.Intn(i)+3))
+				im.DrawImage(as.textures[rand.Intn(int(END))], &dio)
+				dio.GeoM.Reset()
+				dio.GeoM.Translate(float64(rand.Intn(i)+3), float64(rand.Intn(i)+3))
+				blim.DrawImage(as.fullTextures[rand.Intn(int(END))], &dio)
+			}
+			tiles[i][n] = im
+			bluetiles[i][n] = blim
 		}
 	}
 }
