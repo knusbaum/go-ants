@@ -11,6 +11,7 @@ import (
 )
 
 const (
+	// MUST MATCH shader.kage WIDTH/HEIGHT!
 	WIDTH  = 1280
 	HEIGHT = 720
 	//	WIDTH  = 2256

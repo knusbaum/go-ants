@@ -778,7 +778,7 @@ func memsetRepeat(a []uint8, v uint8) {
 
 // func (as *AntScene) Render(g *Game[GameState], r *sdl.Renderer, s *GameState) error {
 func (as *AntScene) Draw(g *Game[GameState], st *GameState, screen *ebiten.Image) {
-	err := as.field.Render(screen)
+	err := as.field.Render(as, screen)
 	if err != nil {
 		panic(err)
 	}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"reflect"
 	"unsafe"
 
@@ -21,6 +22,7 @@ type DField struct {
 	width, height int
 
 	//tex *sdl.Texture
+	shader *ebiten.Shader
 }
 
 func (f *DField) renderGridspot(as *AntScene, idx int) uint32 {
@@ -68,7 +70,16 @@ func (f *DField) renderGridspot(as *AntScene, idx int) uint32 {
 	}
 }
 
+//go:embed shader.kage
+var shaderProgram []byte
+
 func NewDField(width, height int) (*DField, error) {
+	// shader, err := ebiten.NewShader(shaderProgram)
+	// if err != nil {
+	// 	fmt.Printf("Fatal, failed to compile shader: %v\n", err)
+	// 	os.Exit(1)
+	// }
+
 	f := &DField{
 		foodpher:  make([]int, width*height),
 		homepher:  make([]int, width*height),
@@ -79,6 +90,7 @@ func NewDField(width, height int) (*DField, error) {
 		//valToColor: toColor,
 		width:  width,
 		height: height,
+		//shader: shader,
 	}
 	return f, nil
 }
@@ -102,16 +114,39 @@ func (f *DField) Idx(x, y int) int {
 }
 
 func (f *DField) Update(as *AntScene, x, y int) {
-	f.renderbuf[x+y*f.width] = f.renderGridspot(as, x+y*f.width)
+	//	f.renderbuf[x+y*f.width] = f.renderGridspot(as, x+y*f.width)
 }
 
 func (f *DField) UpdateAll(as *AntScene) {
+	// for i := range f.food {
+	// 	f.renderbuf[i] = f.renderGridspot(as, i)
+	// }
+}
+
+func (f *DField) Render(as *AntScene, r *ebiten.Image) error {
+	// var vertices [4]ebiten.Vertex
+
+	// // map the vertices to the target image
+	// bounds := r.Bounds()
+	// vertices[0].DstX = float32(bounds.Min.X) // top-left
+	// vertices[0].DstY = float32(bounds.Min.Y) // top-left
+	// vertices[1].DstX = float32(bounds.Max.X) // top-right
+	// vertices[1].DstY = float32(bounds.Min.Y) // top-right
+	// vertices[2].DstX = float32(bounds.Min.X) // bottom-left
+	// vertices[2].DstY = float32(bounds.Max.Y) // bottom-left
+	// vertices[3].DstX = float32(bounds.Max.X) // bottom-right
+	// vertices[3].DstY = float32(bounds.Max.Y) // bottom-right
+
+	// var shaderOpts ebiten.DrawTrianglesShaderOptions
+	// shaderOpts.Uniforms = make(map[string]any)
+
+	// indices := []uint16{0, 1, 2, 2, 1, 3} // map vertices to triangles
+	// r.DrawTrianglesShader(vertices[:], indices, f.shader, &shaderOpts)
+
 	for i := range f.food {
 		f.renderbuf[i] = f.renderGridspot(as, i)
 	}
-}
 
-func (f *DField) Render(r *ebiten.Image) error {
 	var bbs []byte
 	sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&bbs))
 	sliceHeader.Cap = int(len(f.renderbuf) * 4)
