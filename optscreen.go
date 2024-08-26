@@ -257,7 +257,7 @@ func (s *OptScene) Update(g *Game[GameState], state *GameState) error {
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) || inpututil.IsKeyJustPressed(ebiten.KeyM) {
 		g.PopScene()
-		s.as.field.UpdateAll()
+		s.as.field.UpdateAll(s.as)
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyDown) {
 		s.index = (s.index + 1) % max

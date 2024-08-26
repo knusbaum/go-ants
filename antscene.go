@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/gob"
 	"fmt"
 	"image/color"
 	"math"
@@ -44,7 +43,7 @@ type DrawData struct {
 type AntScene struct {
 	st             *GameState
 	ants           []Ant
-	field          *Field[gridspot]
+	field          *DField //*Field[gridspot]
 	textures       []*ebiten.Image
 	fullTextures   []*ebiten.Image
 	pause          bool
@@ -87,25 +86,29 @@ func (as *AntScene) SaveGrid() error {
 	}
 	defer f.Close()
 
-	enc := gob.NewEncoder(f)
-	return enc.Encode(as.field.vals)
+	//enc := gob.NewEncoder(f)
+	//return enc.Encode(as.field.vals)
+	panic("NOT IMPLEMENTED FOR DFIELD")
+	return nil
 }
 
 func (as *AntScene) LoadGrid() error {
-	f, err := os.Open("ants.grid")
-	if err != nil {
-		return err
-	}
-	defer f.Close()
+	panic("NOT IMPLEMENTED FOR DFIELD")
+	// f, err := os.Open("ants.grid")
+	// if err != nil {
+	// 	return err
+	// }
+	// defer f.Close()
 
-	enc := gob.NewDecoder(f)
-	g := []gridspot{}
-	err = enc.Decode(&g)
-	if err != nil {
-		return err
-	}
-	as.field.vals = g
-	as.field.UpdateAll()
+	// enc := gob.NewDecoder(f)
+	// g := []gridspot{}
+	// err = enc.Decode(&g)
+	// if err != nil {
+	// 	return err
+	// }
+	// as.field.vals = g
+	// as.field.UpdateAll()
+
 	return nil
 }
 
@@ -114,7 +117,7 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 	if inpututil.IsKeyJustPressed(ebiten.KeyP) {
 		as.st.renderPher = !as.st.renderPher
 		fmt.Printf("RENDER PHEROMONES: %t\n", as.st.renderPher)
-		as.field.UpdateAll()
+		as.field.UpdateAll(as)
 	} else if inpututil.IsKeyJustPressed(ebiten.KeyM) {
 		o := &OptScene{as: as}
 		fmt.Printf("PushingScene\n")
@@ -140,30 +143,29 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 	} else if inpututil.IsKeyJustPressed(ebiten.KeyA) {
 		as.relocateAnts()
 	} else if inpututil.IsKeyJustPressed(ebiten.KeyC) {
-		as.field.Clear()
+		as.field.Clear(as)
 		for x := 0; x < 100; x++ {
 			for y := 0; y < 100; y++ {
-				as.field.Get(x, y).Home = true
-				as.field.Update(x, y)
+				//as.field.Get(x, y).Home = true
+				as.field.home[as.field.Idx(x, y)] = true
+				as.field.Update(as, x, y)
 			}
 		}
 		as.relocateAnts()
 	} else if inpututil.IsKeyJustPressed(ebiten.KeyF) {
+		as.field.Clear(as)
 		for y := 0; y < g.height; y++ {
 			for x := 0; x < g.width; x++ {
-				spot := as.field.Get(x, y)
-				*spot = gridspot{}
-				spot.Wall = true
-				as.field.Update(x, y)
+				i := as.field.Idx(x, y)
+				as.field.wall[i] = true
+				as.field.Update(as, x, y)
 			}
 		}
 
 		for x := 0; x < 100; x++ {
 			for y := 0; y < 100; y++ {
-				spot := as.field.Get(x, y)
-				*spot = gridspot{}
-				as.field.Get(x, y).Home = true
-				as.field.Update(x, y)
+				as.field.home[as.field.Idx(x, y)] = true
+				as.field.Update(as, x, y)
 			}
 		}
 	} else if inpututil.IsKeyJustPressed(ebiten.KeyX) {
@@ -198,7 +200,7 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 	}
 
 	//radius := 15
-	doSpot := func(x, y int, f func(x, y int, gs *gridspot)) {
+	doSpot := func(x, y int, f func(x, y, idx int)) {
 		for i := x - as.st.drawradius; i < x+as.st.drawradius; i++ {
 			if i < 0 || i >= g.width {
 				continue
@@ -211,8 +213,8 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 				if distance(i, j, x, y) > as.st.drawradius {
 					continue
 				}
-				spot := as.field.Get(int(i), int(j))
-				f(int(i), int(j), spot)
+				//spot := as.field.Get(int(i), int(j))
+				f(int(i), int(j), as.field.Idx(i, j))
 			}
 		}
 	}
@@ -221,14 +223,14 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 		mx, my := ebiten.CursorPosition()
 		//if mx != as.mousePX || my != as.mousePY {
 		doLine(mx, my, as.mousePX, as.mousePY, func(cx, cy int) {
-			doSpot(cx, cy, func(x, y int, spot *gridspot) {
-				if spot.Home {
+			doSpot(cx, cy, func(x, y, idx int) {
+				if as.field.home[idx] {
 					return
 				}
-				spot.Wall = true
+				as.field.wall[idx] = true
 				//spot.Home = false
-				spot.Food = 0
-				as.field.Update(x, y)
+				as.field.food[idx] = 0
+				as.field.Update(as, x, y)
 			})
 		})
 		//}
@@ -237,11 +239,11 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 		mx, my := ebiten.CursorPosition()
 		//if mx != as.mousePX || my != as.mousePY {
 		doLine(mx, my, as.mousePX, as.mousePY, func(cx, cy int) {
-			doSpot(cx, cy, func(x, y int, spot *gridspot) {
-				spot.Wall = false
+			doSpot(cx, cy, func(x, y, idx int) {
+				as.field.wall[idx] = false
 				//spot.Home = false
-				spot.Food = 0
-				as.field.Update(x, y)
+				as.field.food[idx] = 0
+				as.field.Update(as, x, y)
 			})
 		})
 		//}
@@ -250,11 +252,11 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 		mx, my := ebiten.CursorPosition()
 		//if mx != as.mousePX || my != as.mousePY {
 		doLine(mx, my, as.mousePX, as.mousePY, func(cx, cy int) {
-			doSpot(cx, cy, func(x, y int, spot *gridspot) {
-				spot.Wall = false
+			doSpot(cx, cy, func(x, y, idx int) {
+				as.field.wall[idx] = false
 				//spot.Home = false
-				spot.Food = as.st.foodcount
-				as.field.Update(x, y)
+				as.field.food[idx] = as.st.foodcount
+				as.field.Update(as, x, y)
 			})
 		})
 		//}
@@ -355,7 +357,7 @@ func drawAntTextures(c color.Color) []*ebiten.Image {
 func (as *AntScene) Init(g *Game[GameState], st *GameState) error {
 	as.st = st
 	as.pause = true
-	f, err := NewField[gridspot](g.width, g.height, as.renderGridspot)
+	f, err := NewDField(g.width, g.height)
 	if err != nil {
 		return err
 	}
@@ -375,16 +377,18 @@ func (as *AntScene) Init(g *Game[GameState], st *GameState) error {
 
 	for y := 0; y < g.height; y++ {
 		for x := 0; x < g.width; x++ {
-			as.field.Get(x, y).Wall = true
-			as.field.Update(x, y)
+			//as.field.Get(x, y).Wall = true
+			as.field.wall[as.field.Idx(x, y)] = true
+			as.field.Update(as, x, y)
 		}
 	}
 
 	for x := 0; x < 100; x++ {
 		for y := 0; y < 100; y++ {
-			as.field.Get(x, y).Wall = false
-			as.field.Get(x, y).Home = true
-			as.field.Update(x, y)
+			idx := as.field.Idx(x, y)
+			as.field.wall[idx] = false
+			as.field.home[idx] = true
+			as.field.Update(as, x, y)
 		}
 	}
 
@@ -492,18 +496,21 @@ func (as *AntScene) UpdatePherPartial(start, end int) {
 	for y := start; y < end; y++ {
 		for x := 0; x < as.field.width; x++ {
 			update := false
-			spot := as.field.Get(x, y)
-			if spot.FoodPher > 0 {
-				spot.FoodPher -= (spot.FoodPher / as.st.fadedivisor) + 1
+			//spot := as.field.Get(x, y)
+			idx := as.field.Idx(x, y)
+			if as.field.foodpher[idx] > 0 { //spot.FoodPher > 0 {
+				//spot.FoodPher -= (spot.FoodPher / as.st.fadedivisor) + 1
+				as.field.foodpher[idx] -= (as.field.foodpher[idx] / as.st.fadedivisor) + 1
 				update = true
 			}
-			if spot.HomePher > 0 {
-				spot.HomePher -= (spot.HomePher / as.st.fadedivisor) + 1
+			if as.field.homepher[idx] > 0 {
+				//spot.HomePher -= (spot.HomePher / as.st.fadedivisor) + 1
+				as.field.homepher[idx] -= (as.field.homepher[idx] / as.st.fadedivisor) + 1
 				update = true
 			}
 
 			if update && as.st.renderPher {
-				as.field.Update(x, y)
+				as.field.Update(as, x, y)
 			}
 		}
 	}
@@ -746,8 +753,10 @@ func cmpAnt(a, b Ant) int {
 	// return 1
 }
 
-var chunksize = 16
-var maxperchunk uint8 = 1
+// var chunksize = 16
+// var maxperchunk uint8 = 1
+var chunksize = 1
+var maxperchunk uint8 = 32
 var cycle = 0
 
 type space struct {

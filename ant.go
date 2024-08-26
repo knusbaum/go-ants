@@ -80,7 +80,8 @@ func (p point) Within(x, y, w, h int) bool {
 }
 
 type Ant struct {
-	pos    point
+	pos point
+	//idx    int // index based on position == pos.x + pos.y*height
 	dir    direction
 	food   int
 	marker int
@@ -91,20 +92,22 @@ type Ant struct {
 func (a *Ant) WallAt(an *AntScene, d direction) bool {
 	np := a.pos.PointAt(d)
 	if np.Within(0, 0, an.st.width, an.st.height) {
-		return an.field.vals[np.x+np.y*an.field.width].Wall
+		return an.field.wall[np.x+np.y*an.field.width]
+		//return an.field.vals[np.x+np.y*an.field.width].Wall
+		//return an.field.vals[a.idx].Wall
 		//return an.field.Get(np.x, np.y).Wall
 	}
 	return true
 }
 
-func (a *Ant) GridAt(an *AntScene, d direction) (*gridspot, bool) {
-	np := a.pos.PointAt(d)
-	if np.Within(0, 0, an.st.width, an.st.height) {
-		//return an.grid[np.x][np.y], true
-		return an.field.Get(np.x, np.y), true
-	}
-	return nil, false
-}
+// func (a *Ant) GridAt(an *AntScene, d direction) (*gridspot, bool) {
+// 	np := a.pos.PointAt(d)
+// 	if np.Within(0, 0, an.st.width, an.st.height) {
+// 		//return an.grid[np.x][np.y], true
+// 		return an.field.Get(np.x, np.y), true
+// 	}
+// 	return nil, false
+// }
 
 func (d direction) Left(n int) direction {
 	d -= direction(n)
@@ -176,17 +179,19 @@ func (d direction) Right(n int) direction {
 
 func (a *Ant) Line(an *AntScene, d direction, size int) gridspot {
 	var pt gridspot
-	addspot := func(g *gridspot) bool {
-		if g.Wall {
+	//addspot := func(g *gridspot) bool {
+	addspot := func(x, y int) bool {
+		idx := x + y*an.field.width
+		if an.field.wall[idx] {
 			pt.Wall = true
 			return false
 		}
 		// if g.Food < 0 {
 		// 	panic("g.FOOD < 0 \n")
 		// }
-		pt.FoodPher += g.FoodPher + (g.Food << 8) //g.Food*pheromoneMax*2
-		pt.HomePher += g.HomePher
-		if g.Home {
+		pt.FoodPher += an.field.foodpher[idx] + (an.field.food[idx] << 8) //g.Food*pheromoneMax*2
+		pt.HomePher += an.field.homepher[idx]
+		if an.field.home[idx] {
 			pt.HomePher += pheromoneMax << 1 //* 2
 		}
 		return true
@@ -198,7 +203,8 @@ func (a *Ant) Line(an *AntScene, d direction, size int) gridspot {
 				pt.Wall = true
 				break
 			}
-			if !addspot(an.field.Get(a.pos.x, y)) {
+			//if !addspot(an.field.Get(a.pos.x, y)) {
+			if !addspot(a.pos.x, y) {
 				break
 			}
 		}
@@ -210,7 +216,7 @@ func (a *Ant) Line(an *AntScene, d direction, size int) gridspot {
 				pt.Wall = true
 				break
 			}
-			if !addspot(an.field.Get(x, y)) {
+			if !addspot(x, y) {
 				break
 			}
 		}
@@ -220,7 +226,7 @@ func (a *Ant) Line(an *AntScene, d direction, size int) gridspot {
 				pt.Wall = true
 				break
 			}
-			if !addspot(an.field.Get(x, a.pos.y)) {
+			if !addspot(x, a.pos.y) {
 				break
 			}
 		}
@@ -232,7 +238,7 @@ func (a *Ant) Line(an *AntScene, d direction, size int) gridspot {
 				pt.Wall = true
 				break
 			}
-			if !addspot(an.field.Get(x, y)) {
+			if !addspot(x, y) {
 				break
 			}
 		}
@@ -242,7 +248,7 @@ func (a *Ant) Line(an *AntScene, d direction, size int) gridspot {
 				pt.Wall = true
 				break
 			}
-			if !addspot(an.field.Get(a.pos.x, y)) {
+			if !addspot(a.pos.x, y) {
 				break
 			}
 		}
@@ -254,7 +260,7 @@ func (a *Ant) Line(an *AntScene, d direction, size int) gridspot {
 				pt.Wall = true
 				break
 			}
-			if !addspot(an.field.Get(x, y)) {
+			if !addspot(x, y) {
 				break
 			}
 		}
@@ -264,7 +270,7 @@ func (a *Ant) Line(an *AntScene, d direction, size int) gridspot {
 				pt.Wall = true
 				break
 			}
-			if !addspot(an.field.Get(x, a.pos.y)) {
+			if !addspot(x, a.pos.y) {
 				break
 			}
 		}
@@ -276,7 +282,7 @@ func (a *Ant) Line(an *AntScene, d direction, size int) gridspot {
 				pt.Wall = true
 				break
 			}
-			if !addspot(an.field.Get(x, y)) {
+			if !addspot(x, y) {
 				break
 			}
 		}
@@ -341,10 +347,10 @@ func (a *Ant) SumOctant(g *GameState, an *AntScene, d direction, size int) grids
 			//if p.Within(0, 0, WIDTH, HEIGHT) && !an.grid[x][y].Wall
 			if p.Within(0, 0, an.st.width, an.st.height) {
 				//spot := an.field.Get(x, y)
-				if !an.field.vals[x+y*an.field.width].Wall {
-					pt.FoodPher += an.field.vals[x+y*an.field.width].FoodPher + an.field.vals[x+y*an.field.width].Food*100000 // - (an.grid[x][y].homePher / 4)
-					pt.HomePher += an.field.vals[x+y*an.field.width].HomePher                                                 // - (an.grid[x][y].foodPher / 4)
-					if an.field.vals[x+y*an.field.width].Home {
+				if !an.field.wall[x+y*an.field.width] {
+					pt.FoodPher += an.field.foodpher[x+y*an.field.width] + an.field.food[x+y*an.field.width]*100000 // - (an.grid[x][y].homePher / 4)
+					pt.HomePher += an.field.homepher[x+y*an.field.width]                                            // - (an.grid[x][y].foodPher / 4)
+					if an.field.home[x+y*an.field.width] {
 						pt.HomePher += 100000
 					}
 				}
@@ -380,7 +386,10 @@ func (a *Ant) Update(as *AntScene) bool {
 		// }
 		return false
 	}
-	if as.field.Get(a.pos.x, a.pos.y).Home {
+	aidx := as.field.Idx(a.pos.x, a.pos.y)
+	//if as.field.vals[a.idx].Home {
+	if as.field.home[aidx] {
+		//if as.field.Get(a.pos.x, a.pos.y).Home {
 		if a.food > 0 {
 			as.homelife += int64(a.food) * int64(as.st.foodlife)
 			a.food = 0
@@ -393,17 +402,19 @@ func (a *Ant) Update(as *AntScene) bool {
 		// a.life += int(need)
 		a.marker = marker
 	}
-	if spot := as.field.Get(a.pos.x, a.pos.y); spot.Food > 0 {
+	//if spot := as.field.vals[a.idx]; spot.Food > 0 {
+	//if spot := as.field.Get(a.pos.x, a.pos.y); spot.Food > 0 {
+	if food := as.field.food[aidx]; food > 0 {
 		if a.food == 0 {
-			a.dir = a.dir.Right(4)
-			if spot.Food > 10 {
-				spot.Food -= 10
-				as.field.Update(a.pos.x, a.pos.y)
+			//a.dir = a.dir.Right(4)
+			if food > 10 {
+				as.field.food[aidx] -= 10
+				as.field.Update(as, a.pos.x, a.pos.y)
 				a.food = 10
 			} else {
-				a.food = spot.Food
-				spot.Food = 0
-				as.field.Update(a.pos.x, a.pos.y)
+				a.food = food
+				as.field.food[aidx] = 0
+				as.field.Update(as, a.pos.x, a.pos.y)
 			}
 		}
 		a.marker = marker
@@ -411,28 +422,32 @@ func (a *Ant) Update(as *AntScene) bool {
 
 	if a.food > 0 {
 		a.tex = as.fullTextures[a.dir]
-		spot := as.field.Get(a.pos.x, a.pos.y)
-		if spot.FoodPher > a.marker {
-			a.marker = spot.FoodPher
+		//spot := as.field.vals[a.idx]
+		//spot := as.field.Get(a.pos.x, a.pos.y)
+		fp := as.field.foodpher[aidx]
+		if fp > a.marker {
+			a.marker = fp
 			a.marker -= (a.marker / antFadeDivisor(as.st.fadedivisor)) + 1
 		} else {
-			spot.FoodPher = a.marker
+			as.field.foodpher[aidx] = a.marker
 			a.marker -= (a.marker / antFadeDivisor(as.st.fadedivisor)) + 1
 			if as.st.renderPher {
-				as.field.Update(a.pos.x, a.pos.y)
+				as.field.Update(as, a.pos.x, a.pos.y)
 			}
 		}
 	} else {
 		a.tex = as.textures[a.dir]
-		spot := as.field.Get(a.pos.x, a.pos.y)
-		if spot.HomePher > a.marker {
-			a.marker = spot.HomePher
+		//spot := as.field.vals[a.idx]
+		//spot := as.field.Get(a.pos.x, a.pos.y)
+		hp := as.field.homepher[aidx]
+		if hp > a.marker {
+			a.marker = hp
 			a.marker -= (a.marker / antFadeDivisor(as.st.fadedivisor)) + 1
 		} else {
-			spot.HomePher = a.marker
+			as.field.homepher[aidx] = a.marker
 			a.marker -= (a.marker / antFadeDivisor(as.st.fadedivisor)) + 1
 			if as.st.renderPher {
-				as.field.Update(a.pos.x, a.pos.y)
+				as.field.Update(as, a.pos.x, a.pos.y)
 			}
 		}
 	}
@@ -565,12 +580,16 @@ func (a *Ant) Move(an *AntScene) {
 		}
 	}
 
-	//if g, ok := a.GridAt(an, a.dir); !ok || g.Wall {
+	// g, ok := a.GridAt(an, a.dir)
+
+	// w := !ok || g.Wall
+
+	// if w {
 	if a.WallAt(an, a.dir) {
 		a.dir = a.dir.Right((rand.Intn(3) - 1) * 2)
-		g, ok := a.GridAt(an, a.dir)
+		//g, ok := a.GridAt(an, a.dir)
 		i := 0
-		for ; !ok || g.Wall; g, ok = a.GridAt(an, a.dir) {
+		for a.WallAt(an, a.dir) {
 			a.dir = a.dir.Right((rand.Intn(3) - 1) * 2)
 			//a.dir = a.dir.Right(1)
 			i++
@@ -583,4 +602,5 @@ func (a *Ant) Move(an *AntScene) {
 	}
 
 	a.pos = a.pos.PointAt(a.dir)
+	//a.idx = a.pos.x + a.pos.y*an.field.width
 }
