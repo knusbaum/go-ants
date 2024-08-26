@@ -146,9 +146,9 @@ func makeTexts(st *GameState) []opt {
 		},
 		{
 			name:  "Stockpile Factor (stockpile vs spawn)",
-			value: fmt.Sprintf("%d", st.spawnparam),
-			left:  withProgressiveDuration(func(x int) { st.spawnparam -= x }),
-			right: withProgressiveDuration(func(x int) { st.spawnparam += x }),
+			value: fmt.Sprintf("%d", st.stockpile),
+			left:  withProgressiveDuration(func(x int) { st.stockpile -= x }),
+			right: withProgressiveDuration(func(x int) { st.stockpile += x }),
 		},
 		{
 			name:  "Max Ant Population",
@@ -278,8 +278,8 @@ func (s *OptScene) Update(g *Game[GameState], state *GameState) error {
 	}
 
 	// limts
-	if state.spawnparam <= 0 {
-		state.spawnparam = 1
+	if state.stockpile <= 0 {
+		state.stockpile = 1
 		s.opts = makeTexts(state)
 	}
 

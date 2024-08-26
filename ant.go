@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"math/rand"
+
+	"github.com/hajimehoshi/ebiten/v2"
 )
 
 type direction int
@@ -83,15 +85,25 @@ type Ant struct {
 	food   int
 	marker int
 	life   int
+	tex    *ebiten.Image
 }
 
-func (a *Ant) GridAt(an *AntScene, d direction) (gridspot, bool) {
+func (a *Ant) WallAt(an *AntScene, d direction) bool {
+	np := a.pos.PointAt(d)
+	if np.Within(0, 0, an.st.width, an.st.height) {
+		return an.field.vals[np.x+np.y*an.field.width].Wall
+		//return an.field.Get(np.x, np.y).Wall
+	}
+	return true
+}
+
+func (a *Ant) GridAt(an *AntScene, d direction) (*gridspot, bool) {
 	np := a.pos.PointAt(d)
 	if np.Within(0, 0, an.st.width, an.st.height) {
 		//return an.grid[np.x][np.y], true
-		return *an.field.Get(np.x, np.y), true
+		return an.field.Get(np.x, np.y), true
 	}
-	return gridspot{}, false
+	return nil, false
 }
 
 func (d direction) Left(n int) direction {
@@ -169,13 +181,13 @@ func (a *Ant) Line(an *AntScene, d direction, size int) gridspot {
 			pt.Wall = true
 			return false
 		}
-		if g.Food < 0 {
-			panic("g.FOOD < 0 \n")
-		}
-		pt.FoodPher += g.FoodPher + g.Food*pheromoneMax*2
+		// if g.Food < 0 {
+		// 	panic("g.FOOD < 0 \n")
+		// }
+		pt.FoodPher += g.FoodPher + (g.Food << 8) //g.Food*pheromoneMax*2
 		pt.HomePher += g.HomePher
 		if g.Home {
-			pt.HomePher += pheromoneMax * 2
+			pt.HomePher += pheromoneMax << 1 //* 2
 		}
 		return true
 	}
@@ -398,6 +410,7 @@ func (a *Ant) Update(as *AntScene) bool {
 	}
 
 	if a.food > 0 {
+		a.tex = as.fullTextures[a.dir]
 		spot := as.field.Get(a.pos.x, a.pos.y)
 		if spot.FoodPher > a.marker {
 			a.marker = spot.FoodPher
@@ -410,6 +423,7 @@ func (a *Ant) Update(as *AntScene) bool {
 			}
 		}
 	} else {
+		a.tex = as.textures[a.dir]
 		spot := as.field.Get(a.pos.x, a.pos.y)
 		if spot.HomePher > a.marker {
 			a.marker = spot.HomePher
@@ -551,7 +565,8 @@ func (a *Ant) Move(an *AntScene) {
 		}
 	}
 
-	if g, ok := a.GridAt(an, a.dir); !ok || g.Wall {
+	//if g, ok := a.GridAt(an, a.dir); !ok || g.Wall {
+	if a.WallAt(an, a.dir) {
 		a.dir = a.dir.Right((rand.Intn(3) - 1) * 2)
 		g, ok := a.GridAt(an, a.dir)
 		i := 0

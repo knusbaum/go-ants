@@ -390,9 +390,10 @@ func (as *AntScene) Init(g *Game[GameState], st *GameState) error {
 
 	for a := range as.ants {
 		as.ants[a].life = as.st.antlife
+		as.ants[a].tex = as.textures[N]
 	}
 	if as.homelife == 0 {
-		as.homelife = int64(len(as.ants)) * int64(as.st.antlife) * int64(as.st.spawnparam)
+		as.homelife = int64(len(as.ants)) * int64(as.st.antlife) * int64(as.st.stockpile)
 	}
 
 	// TTF
@@ -524,15 +525,15 @@ func (as *AntScene) Update(g *Game[GameState], st *GameState) error {
 		n = 1
 	}
 	for i := 0; i < n; i++ {
-		if len(as.ants) < st.maxants && as.homelife/(int64(st.antlife)*int64(st.spawnparam)) > int64(len(as.ants)) {
+		if len(as.ants) < st.maxants && as.homelife/(int64(st.antlife)*int64(st.stockpile)) > int64(len(as.ants)) {
 			as.homelife -= int64(st.antlife)
-			as.ants = append(as.ants, Ant{life: as.st.antlife})
+			as.ants = append(as.ants, Ant{life: as.st.antlife, tex: as.textures[N]})
 		}
 	}
 
 	if frame%10 == 0 {
 		fmt.Printf("n: %d, homefood: %d, ants: %d, ratio: %d / %d \n",
-			n, as.homelife, len(as.ants), as.homelife/(int64(st.antlife)*int64(st.spawnparam)), len(as.ants))
+			n, as.homelife, len(as.ants), as.homelife/(int64(st.antlife)*int64(st.stockpile)), len(as.ants))
 	}
 
 	// partsize := (len(as.ants) / workers) + 1
@@ -745,8 +746,8 @@ func cmpAnt(a, b Ant) int {
 	// return 1
 }
 
-var chunksize = 1
-var maxperchunk uint = 32
+var chunksize = 16
+var maxperchunk uint8 = 1
 var cycle = 0
 
 type space struct {
@@ -754,9 +755,9 @@ type space struct {
 	blue  uint
 }
 
-var markers []space = make([]space, WIDTH*HEIGHT)
+var markers []uint8 = make([]uint8, WIDTH*HEIGHT)
 
-func memsetRepeat(a []space, v space) {
+func memsetRepeat(a []uint8, v uint8) {
 	if len(a) == 0 {
 		return
 	}
@@ -774,8 +775,8 @@ func (as *AntScene) Draw(g *Game[GameState], st *GameState, screen *ebiten.Image
 	}
 
 	if st.renderAnts {
-		if st.parallel {
-			if !as.pause && st.cluster {
+		if st.cluster {
+			if !as.pause {
 				afps := ebiten.ActualFPS()
 				if afps < 45 {
 					if maxperchunk == 1 && chunksize < 8 {
@@ -805,95 +806,86 @@ func (as *AntScene) Draw(g *Game[GameState], st *GameState, screen *ebiten.Image
 					}
 				}
 			}
-			//
-			// switch st.sorttype {
-			// case qsort:
-			// 	qsortAnts(as.ants)
-			// case mergesort:
-			// 	as.ants = mergeSortAnts(as.ants)
-			// case stdsort:
-			// 	sort.Sort(sortYX(as.ants))
-			// case slicesort:
-			// 	slices.SortFunc(as.ants, cmpAnt)
-			// }
-			//if st.cluster {
-			//memsetRepeat(markers, space{})
-			//}
-			//var lasty, lastx int
+			memsetRepeat(markers, 0)
 			mask := ^(chunksize - 1)
 			var dio ebiten.DrawImageOptions
 			for a := range as.ants {
-				if st.cluster {
-					loc := ((as.ants[a].pos.y & mask) * WIDTH) + (as.ants[a].pos.x & mask)
-					if as.ants[a].food > 0 {
-						markers[loc].blue += 1
-					} else {
-						markers[loc].brown += 1
-					}
-					if markers[loc].blue+markers[loc].brown > maxperchunk {
-						//if markers[loc].brown > maxperchunk {
-						continue
-					}
+				// if st.cluster {
+				loc := ((as.ants[a].pos.y & mask) * WIDTH) + (as.ants[a].pos.x & mask)
+				//if as.ants[a].food > 0 {
+				markers[loc] += 1
+				//} else {
+				//	markers[loc].brown += 1
+				//}
+				if markers[loc] > maxperchunk {
+					//if markers[loc].brown > maxperchunk {
+					continue
 				}
+				markers[loc] += 1
+				// }
 
-				if as.ants[a].food > 0 {
-					im := as.fullTextures[as.ants[a].dir]
-					dio.GeoM = ebiten.GeoM{}
-					dio.GeoM.Translate(float64(as.ants[a].pos.x-(antTexSize/2)), float64(as.ants[a].pos.y-(antTexSize/2)))
-					screen.DrawImage(im, &dio)
-				} else {
-					im := as.textures[as.ants[a].dir]
-					dio.GeoM = ebiten.GeoM{}
-					dio.GeoM.Translate(float64(as.ants[a].pos.x-(antTexSize/2)), float64(as.ants[a].pos.y-(antTexSize/2)))
-					screen.DrawImage(im, &dio)
-				}
+				// if as.ants[a].food > 0 {
+				// 	im := as.fullTextures[as.ants[a].dir]
+				// 	dio.GeoM = ebiten.GeoM{}
+				// 	dio.GeoM.Translate(float64(as.ants[a].pos.x-(antTexSize/2)), float64(as.ants[a].pos.y-(antTexSize/2)))
+				// 	screen.DrawImage(im, &dio)
+				// } else {
+				// 	im := as.textures[as.ants[a].dir]
+				// 	dio.GeoM = ebiten.GeoM{}
+				// 	dio.GeoM.Translate(float64(as.ants[a].pos.x-(antTexSize/2)), float64(as.ants[a].pos.y-(antTexSize/2)))
+				// 	screen.DrawImage(im, &dio)
+				// }
+				im := as.ants[a].tex
+				dio.GeoM = ebiten.GeoM{}
+				dio.GeoM.Translate(float64(as.ants[a].pos.x-(antTexSize/2)), float64(as.ants[a].pos.y-(antTexSize/2)))
+				screen.DrawImage(im, &dio)
 			}
 
-			if st.cluster {
-				var dio ebiten.DrawImageOptions
-				for y := 0; y < HEIGHT/chunksize; y++ {
-					for x := 0; x < WIDTH/chunksize; x++ {
-						loc := ((y * chunksize * WIDTH) + (x * chunksize))
-						if markers[loc].brown > maxperchunk {
-							ac := markers[loc].brown - maxperchunk
-							//ac &= 0xff
-							if ac > 255 {
-								ac = 255
-							}
-							im := tiles[chunksize][ac]
-							dio.GeoM = ebiten.GeoM{}
-							dio.GeoM.Translate(float64(x*chunksize)-3, float64(y*chunksize)-3)
-							screen.DrawImage(im, &dio)
-						}
-						if markers[loc].blue > maxperchunk {
-							ac := markers[loc].blue - maxperchunk
-							//ac &= 0xff
-							if ac > 255 {
-								ac = 255
-							}
-							im := bluetiles[chunksize][ac]
-							dio.GeoM = ebiten.GeoM{}
-							dio.GeoM.Translate(float64(x*chunksize)-3, float64(y*chunksize)-3)
-							screen.DrawImage(im, &dio)
-						}
-						markers[loc] = space{}
-					}
-				}
-			}
+			// if st.cluster {
+			// 	var dio ebiten.DrawImageOptions
+			// 	for y := 0; y < HEIGHT/chunksize; y++ {
+			// 		for x := 0; x < WIDTH/chunksize; x++ {
+			// 			loc := ((y * chunksize * WIDTH) + (x * chunksize))
+			// 			if markers[loc].brown > maxperchunk {
+			// 				ac := markers[loc].brown - maxperchunk
+			// 				//ac &= 0xff
+			// 				if ac > 255 {
+			// 					ac = 255
+			// 				}
+			// 				im := tiles[chunksize][ac]
+			// 				dio.GeoM = ebiten.GeoM{}
+			// 				dio.GeoM.Translate(float64(x*chunksize)-3, float64(y*chunksize)-3)
+			// 				screen.DrawImage(im, &dio)
+			// 			}
+			// 			if markers[loc].blue > maxperchunk {
+			// 				ac := markers[loc].blue - maxperchunk
+			// 				//ac &= 0xff
+			// 				if ac > 255 {
+			// 					ac = 255
+			// 				}
+			// 				im := bluetiles[chunksize][ac]
+			// 				dio.GeoM = ebiten.GeoM{}
+			// 				dio.GeoM.Translate(float64(x*chunksize)-3, float64(y*chunksize)-3)
+			// 				screen.DrawImage(im, &dio)
+			// 			}
+			// 			markers[loc] = space{}
+			// 		}
+			// 	}
+			// }
 		} else {
 			var dio ebiten.DrawImageOptions
 			for a := range as.ants {
-				if as.ants[a].food > 0 {
-					im := as.fullTextures[as.ants[a].dir]
-					dio.GeoM = ebiten.GeoM{}
-					dio.GeoM.Translate(float64(as.ants[a].pos.x-(antTexSize/2)), float64(as.ants[a].pos.y-(antTexSize/2)))
-					screen.DrawImage(im, &dio)
-				} else {
-					im := as.textures[as.ants[a].dir]
-					dio.GeoM = ebiten.GeoM{}
-					dio.GeoM.Translate(float64(as.ants[a].pos.x-(antTexSize/2)), float64(as.ants[a].pos.y-(antTexSize/2)))
-					screen.DrawImage(im, &dio)
-				}
+				//if as.ants[a].food > 0 {
+				im := as.ants[a].tex
+				dio.GeoM = ebiten.GeoM{}
+				dio.GeoM.Translate(float64(as.ants[a].pos.x-(antTexSize/2)), float64(as.ants[a].pos.y-(antTexSize/2)))
+				screen.DrawImage(im, &dio)
+				//} else {
+				// im := as.textures[as.ants[a].dir]
+				// dio.GeoM = ebiten.GeoM{}
+				// dio.GeoM.Translate(float64(as.ants[a].pos.x-(antTexSize/2)), float64(as.ants[a].pos.y-(antTexSize/2)))
+				// screen.DrawImage(im, &dio)
+				//}
 			}
 		}
 	}
