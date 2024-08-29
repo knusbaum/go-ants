@@ -1,0 +1,21 @@
+//kage:unit pixels
+package main
+
+var FadeDivisor int
+
+func Fragment(targetCoords vec4, sourceCoords vec2, _ vec4) vec4 {
+
+	foodC := imageSrc0At(sourceCoords)
+	//foodC := imageDstAt(targetCoords)
+	foodi := (int(foodC.a*255) << 24) | (int(foodC.b*255) << 16) | (int(foodC.g*255) << 8) | int(foodC.r*255)
+
+	if foodi > 0 {
+		foodi = foodi - ((foodi / FadeDivisor) + 1)
+	}
+	//foodi = foodi - 1
+
+	return vec4(float(foodi&0xFF)/255, float((foodi>>8)&0xFF)/255, float((foodi>>16)&0xFF)/255, float((foodi>>24)&0xFF)/255)
+	//return foodC
+	//return vec4(0.2, 0.4, 0.6, 0.8)
+	//return 0
+}
