@@ -17,31 +17,32 @@ const (
 )
 
 type DField struct {
-	foodpher []uint32
-	homepher []uint32
-	food     []uint32
-	//home     []bool
-	//wall     []bool
+	foodpher  []uint32
+	homepher  []uint32
+	food      []uint32
 	home_wall []uint32
 
-	//vals       []T
+	// Experimental
+	gradient_bitmap []uint32
+
 	renderbuf []uint32
-	//valToColor func(*T) uint32
 
 	width, height int
 
-	//tex *sdl.Texture
-	shader *ebiten.Shader
-	fader  *ebiten.Shader
-	fpim   *ebiten.Image
-	hpim   *ebiten.Image
-	fim    *ebiten.Image
-	hwim   *ebiten.Image
-	//frw    sync.RWMutex
-	//hrw    sync.RWMutex
+	shader     *ebiten.Shader
+	fader      *ebiten.Shader
+	gradient   *ebiten.Shader
+	rendergrad *ebiten.Shader
+
+	fpim *ebiten.Image
+	hpim *ebiten.Image
+	fim  *ebiten.Image
+	hwim *ebiten.Image
 
 	intermediateSRC2 *ebiten.Image
 	intermediateSRC  *ebiten.Image
+
+	gradientImg *ebiten.Image
 }
 
 func (f *DField) GetHomeWall(x, y int) uint8 {
@@ -202,6 +203,12 @@ var shaderProgram []byte
 //go:embed fader.kage
 var faderProgram []byte
 
+//go:embed gradient.kage
+var gradientProgram []byte
+
+//go:embed rendergradient.kage
+var rendergradientProgram []byte
+
 func NewDField(width, height int) (*DField, error) {
 	shader, err := ebiten.NewShader(shaderProgram)
 	if err != nil {
@@ -211,7 +218,19 @@ func NewDField(width, height int) (*DField, error) {
 
 	fader, err := ebiten.NewShader(faderProgram)
 	if err != nil {
-		fmt.Printf("Fatal, failed to compile shader: %v\n", err)
+		fmt.Printf("Fatal, failed to compile fader: %v\n", err)
+		os.Exit(1)
+	}
+
+	gradient, err := ebiten.NewShader(gradientProgram)
+	if err != nil {
+		fmt.Printf("Fatal, failed to compile gradient: %v\n", err)
+		os.Exit(1)
+	}
+
+	rendergrad, err := ebiten.NewShader(rendergradientProgram)
+	if err != nil {
+		fmt.Printf("Fatal, failed to compile rendergradient: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -221,19 +240,23 @@ func NewDField(width, height int) (*DField, error) {
 		food:     make([]uint32, width*height),
 		//home:      make([]bool, width*height),
 		//wall:      make([]bool, width*height),
-		home_wall: make([]uint32, width*height),
-		renderbuf: make([]uint32, width*height),
+		home_wall:       make([]uint32, width*height),
+		gradient_bitmap: make([]uint32, width*height),
+		renderbuf:       make([]uint32, width*height),
 		//valToColor: toColor,
 		width:            width,
 		height:           height,
 		shader:           shader,
 		fader:            fader,
+		gradient:         gradient,
+		rendergrad:       rendergrad,
 		fpim:             ebiten.NewImage(WIDTH, HEIGHT),
 		hpim:             ebiten.NewImage(WIDTH, HEIGHT),
 		fim:              ebiten.NewImage(WIDTH, HEIGHT),
 		hwim:             ebiten.NewImage(WIDTH, HEIGHT),
 		intermediateSRC:  ebiten.NewImage(WIDTH, HEIGHT),
 		intermediateSRC2: ebiten.NewImage(WIDTH, HEIGHT),
+		gradientImg:      ebiten.NewImage(WIDTH, HEIGHT),
 	}
 	return f, nil
 }
@@ -278,67 +301,101 @@ func (f *DField) Render(as *AntScene, r *ebiten.Image) error {
 	sliceHeader.Len = int(len(f.renderbuf) * 4)
 	sliceHeader.Data = uintptr(unsafe.Pointer(&f.renderbuf[0]))
 	r.ReplacePixels(bbs)
+
+	//r.DrawImage(f.gradientImg, nil)
+
+	// var vertices [4]ebiten.Vertex
+	// // map the vertices to the target image
+	// bounds := r.Bounds()
+	// vertices[0].DstX = float32(bounds.Min.X) // top-left
+	// vertices[0].DstY = float32(bounds.Min.Y) // top-left
+	// vertices[1].DstX = float32(bounds.Max.X) // top-right
+	// vertices[1].DstY = float32(bounds.Min.Y) // top-right
+	// vertices[2].DstX = float32(bounds.Min.X) // bottom-left
+	// vertices[2].DstY = float32(bounds.Max.Y) // bottom-left
+	// vertices[3].DstX = float32(bounds.Max.X) // bottom-right
+	// vertices[3].DstY = float32(bounds.Max.Y) // bottom-right
+
+	// // set the source image sampling coordinates
+	// srcBounds := f.gradientImg.Bounds()
+	// vertices[0].SrcX = float32(srcBounds.Min.X) // top-left
+	// vertices[0].SrcY = float32(srcBounds.Min.Y) // top-left
+	// vertices[1].SrcX = float32(srcBounds.Max.X) // top-right
+	// vertices[1].SrcY = float32(srcBounds.Min.Y) // top-right
+	// vertices[2].SrcX = float32(srcBounds.Min.X) // bottom-left
+	// vertices[2].SrcY = float32(srcBounds.Max.Y) // bottom-left
+	// vertices[3].SrcX = float32(srcBounds.Max.X) // bottom-right
+	// vertices[3].SrcY = float32(srcBounds.Max.Y) // bottom-right
+
+	// // triangle shader options
+	// var shaderOpts ebiten.DrawTrianglesShaderOptions
+	// shaderOpts.Uniforms = make(map[string]any)
+	// shaderOpts.Uniforms["RenderFood"] = 0
+	// shaderOpts.Images[0] = f.gradientImg
+
+	// // draw shader
+	// indices := []uint16{0, 1, 2, 2, 1, 3} // map vertices to triangles
+	// r.DrawTrianglesShader(vertices[:], indices, f.rendergrad, &shaderOpts)
+
 	return nil
 }
 
-func (f *DField) fade(st *GameState, data []uint32, dsti *ebiten.Image) {
-	//start := f.homepher[200+200*f.width]
-	src := f.intermediateSRC
-	dst := dsti
-	dst.Clear()
-	{
+// func (f *DField) fade(st *GameState, data []uint32, dsti *ebiten.Image) {
+// 	//start := f.homepher[200+200*f.width]
+// 	src := f.intermediateSRC
+// 	dst := dsti
+// 	dst.Clear()
+// 	{
 
-		var bbs []byte
-		sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&bbs))
-		sliceHeader.Cap = int(len(data) * 4)
-		sliceHeader.Len = int(len(data) * 4)
-		sliceHeader.Data = uintptr(unsafe.Pointer(&data[0]))
-		src.WritePixels(bbs)
-	}
+// 		var bbs []byte
+// 		sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&bbs))
+// 		sliceHeader.Cap = int(len(data) * 4)
+// 		sliceHeader.Len = int(len(data) * 4)
+// 		sliceHeader.Data = uintptr(unsafe.Pointer(&data[0]))
+// 		src.WritePixels(bbs)
+// 	}
 
-	var vertices [4]ebiten.Vertex
-	// map the vertices to the target image
-	bounds := dst.Bounds()
-	vertices[0].DstX = float32(bounds.Min.X) // top-left
-	vertices[0].DstY = float32(bounds.Min.Y) // top-left
-	vertices[1].DstX = float32(bounds.Max.X) // top-right
-	vertices[1].DstY = float32(bounds.Min.Y) // top-right
-	vertices[2].DstX = float32(bounds.Min.X) // bottom-left
-	vertices[2].DstY = float32(bounds.Max.Y) // bottom-left
-	vertices[3].DstX = float32(bounds.Max.X) // bottom-right
-	vertices[3].DstY = float32(bounds.Max.Y) // bottom-right
+// 	var vertices [4]ebiten.Vertex
+// 	// map the vertices to the target image
+// 	bounds := dst.Bounds()
+// 	vertices[0].DstX = float32(bounds.Min.X) // top-left
+// 	vertices[0].DstY = float32(bounds.Min.Y) // top-left
+// 	vertices[1].DstX = float32(bounds.Max.X) // top-right
+// 	vertices[1].DstY = float32(bounds.Min.Y) // top-right
+// 	vertices[2].DstX = float32(bounds.Min.X) // bottom-left
+// 	vertices[2].DstY = float32(bounds.Max.Y) // bottom-left
+// 	vertices[3].DstX = float32(bounds.Max.X) // bottom-right
+// 	vertices[3].DstY = float32(bounds.Max.Y) // bottom-right
 
-	// set the source image sampling coordinates
-	srcBounds := src.Bounds()
-	vertices[0].SrcX = float32(srcBounds.Min.X) // top-left
-	vertices[0].SrcY = float32(srcBounds.Min.Y) // top-left
-	vertices[1].SrcX = float32(srcBounds.Max.X) // top-right
-	vertices[1].SrcY = float32(srcBounds.Min.Y) // top-right
-	vertices[2].SrcX = float32(srcBounds.Min.X) // bottom-left
-	vertices[2].SrcY = float32(srcBounds.Max.Y) // bottom-left
-	vertices[3].SrcX = float32(srcBounds.Max.X) // bottom-right
-	vertices[3].SrcY = float32(srcBounds.Max.Y) // bottom-right
+// 	// set the source image sampling coordinates
+// 	srcBounds := src.Bounds()
+// 	vertices[0].SrcX = float32(srcBounds.Min.X) // top-left
+// 	vertices[0].SrcY = float32(srcBounds.Min.Y) // top-left
+// 	vertices[1].SrcX = float32(srcBounds.Max.X) // top-right
+// 	vertices[1].SrcY = float32(srcBounds.Min.Y) // top-right
+// 	vertices[2].SrcX = float32(srcBounds.Min.X) // bottom-left
+// 	vertices[2].SrcY = float32(srcBounds.Max.Y) // bottom-left
+// 	vertices[3].SrcX = float32(srcBounds.Max.X) // bottom-right
+// 	vertices[3].SrcY = float32(srcBounds.Max.Y) // bottom-right
 
-	// triangle shader options
-	var shaderOpts ebiten.DrawTrianglesShaderOptions
-	shaderOpts.Uniforms = make(map[string]any)
-	shaderOpts.Uniforms["FadeDivisor"] = st.fadedivisor
-	shaderOpts.Images[0] = src
+// 	// triangle shader options
+// 	var shaderOpts ebiten.DrawTrianglesShaderOptions
+// 	shaderOpts.Uniforms = make(map[string]any)
+// 	shaderOpts.Uniforms["FadeDivisor"] = st.fadedivisor
+// 	shaderOpts.Images[0] = src
 
-	// draw shader
-	indices := []uint16{0, 1, 2, 2, 1, 3} // map vertices to triangles
-	dst.DrawTrianglesShader(vertices[:], indices, f.fader, &shaderOpts)
-	{
-		var bbs []byte
-		sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&bbs))
-		sliceHeader.Cap = int(len(data) * 4)
-		sliceHeader.Len = int(len(data) * 4)
-		sliceHeader.Data = uintptr(unsafe.Pointer(&data[0]))
-		dst.ReadPixels(bbs)
-	}
-
-	//fmt.Printf("homepher: %X(%d) -> %X(%d)\n", start, start, f.homepher[200+200*f.width], f.homepher[200+200*f.width])
-}
+// 	// draw shader
+// 	indices := []uint16{0, 1, 2, 2, 1, 3} // map vertices to triangles
+// 	dst.DrawTrianglesShader(vertices[:], indices, f.fader, &shaderOpts)
+// 	{
+// 		var bbs []byte
+// 		sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&bbs))
+// 		sliceHeader.Cap = int(len(data) * 4)
+// 		sliceHeader.Len = int(len(data) * 4)
+// 		sliceHeader.Data = uintptr(unsafe.Pointer(&data[0]))
+// 		dst.ReadPixels(bbs)
+// 	}
+// }
 
 // This appears to be slower than the parallel CPU implementation (AntScene.UpdatePherPartial)
 func (f *DField) UpdatePher(st *GameState) {
@@ -422,21 +479,23 @@ func (f *DField) UpdatePher(st *GameState) {
 func (f *DField) GPURender(as *AntScene, r *ebiten.Image) error {
 	// We don't need to copy fpim and hpim because
 	// they are updated by the UpdatePher method.
-	{
-		var bbs []byte
-		sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&bbs))
-		sliceHeader.Cap = int(len(f.foodpher) * 4)
-		sliceHeader.Len = int(len(f.foodpher) * 4)
-		sliceHeader.Data = uintptr(unsafe.Pointer(&f.foodpher[0]))
-		f.fpim.WritePixels(bbs)
-	}
-	{
-		var bbs []byte
-		sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&bbs))
-		sliceHeader.Cap = int(len(f.homepher) * 4)
-		sliceHeader.Len = int(len(f.homepher) * 4)
-		sliceHeader.Data = uintptr(unsafe.Pointer(&f.homepher[0]))
-		f.hpim.WritePixels(bbs)
+	if as.st.renderPher {
+		{
+			var bbs []byte
+			sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&bbs))
+			sliceHeader.Cap = int(len(f.foodpher) * 4)
+			sliceHeader.Len = int(len(f.foodpher) * 4)
+			sliceHeader.Data = uintptr(unsafe.Pointer(&f.foodpher[0]))
+			f.fpim.WritePixels(bbs)
+		}
+		{
+			var bbs []byte
+			sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&bbs))
+			sliceHeader.Cap = int(len(f.homepher) * 4)
+			sliceHeader.Len = int(len(f.homepher) * 4)
+			sliceHeader.Data = uintptr(unsafe.Pointer(&f.homepher[0]))
+			f.hpim.WritePixels(bbs)
+		}
 	}
 	{
 		var bbs []byte
@@ -480,8 +539,10 @@ func (f *DField) GPURender(as *AntScene, r *ebiten.Image) error {
 
 	// triangle shader options
 	var shaderOpts ebiten.DrawTrianglesShaderOptions
-	shaderOpts.Images[0] = f.fpim
-	shaderOpts.Images[1] = f.hpim
+	if as.st.renderPher {
+		shaderOpts.Images[0] = f.fpim
+		shaderOpts.Images[1] = f.hpim
+	}
 	shaderOpts.Images[2] = f.fim
 	shaderOpts.Images[3] = f.hwim
 
@@ -489,4 +550,85 @@ func (f *DField) GPURender(as *AntScene, r *ebiten.Image) error {
 	indices := []uint16{0, 1, 2, 2, 1, 3} // map vertices to triangles
 	r.DrawTrianglesShader(vertices[:], indices, f.shader, &shaderOpts)
 	return nil
+}
+
+func (f *DField) GenerateGradient() {
+	// We don't need to copy fpim and hpim because
+	// they are updated by the UpdatePher method.
+	{
+		var bbs []byte
+		sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&bbs))
+		sliceHeader.Cap = int(len(f.foodpher) * 4)
+		sliceHeader.Len = int(len(f.foodpher) * 4)
+		sliceHeader.Data = uintptr(unsafe.Pointer(&f.foodpher[0]))
+		f.fpim.WritePixels(bbs)
+	}
+	{
+		var bbs []byte
+		sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&bbs))
+		sliceHeader.Cap = int(len(f.homepher) * 4)
+		sliceHeader.Len = int(len(f.homepher) * 4)
+		sliceHeader.Data = uintptr(unsafe.Pointer(&f.homepher[0]))
+		f.hpim.WritePixels(bbs)
+	}
+	{
+		var bbs []byte
+		sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&bbs))
+		sliceHeader.Cap = int(len(f.food) * 4)
+		sliceHeader.Len = int(len(f.food) * 4)
+		sliceHeader.Data = uintptr(unsafe.Pointer(&f.food[0]))
+		f.fim.WritePixels(bbs)
+	}
+	{
+		var bbs []byte
+		sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&bbs))
+		sliceHeader.Cap = int(len(f.home_wall) * 4)
+		sliceHeader.Len = int(len(f.home_wall) * 4)
+		sliceHeader.Data = uintptr(unsafe.Pointer(&f.home_wall[0]))
+		f.hwim.WritePixels(bbs)
+	}
+	f.gradientImg.Clear()
+
+	var vertices [4]ebiten.Vertex
+	// map the vertices to the target image
+	bounds := f.gradientImg.Bounds()
+	vertices[0].DstX = float32(bounds.Min.X) // top-left
+	vertices[0].DstY = float32(bounds.Min.Y) // top-left
+	vertices[1].DstX = float32(bounds.Max.X) // top-right
+	vertices[1].DstY = float32(bounds.Min.Y) // top-right
+	vertices[2].DstX = float32(bounds.Min.X) // bottom-left
+	vertices[2].DstY = float32(bounds.Max.Y) // bottom-left
+	vertices[3].DstX = float32(bounds.Max.X) // bottom-right
+	vertices[3].DstY = float32(bounds.Max.Y) // bottom-right
+
+	// set the source image sampling coordinates
+	srcBounds := f.fpim.Bounds()
+	vertices[0].SrcX = float32(srcBounds.Min.X) // top-left
+	vertices[0].SrcY = float32(srcBounds.Min.Y) // top-left
+	vertices[1].SrcX = float32(srcBounds.Max.X) // top-right
+	vertices[1].SrcY = float32(srcBounds.Min.Y) // top-right
+	vertices[2].SrcX = float32(srcBounds.Min.X) // bottom-left
+	vertices[2].SrcY = float32(srcBounds.Max.Y) // bottom-left
+	vertices[3].SrcX = float32(srcBounds.Max.X) // bottom-right
+	vertices[3].SrcY = float32(srcBounds.Max.Y) // bottom-right
+
+	// triangle shader options
+	var shaderOpts ebiten.DrawTrianglesShaderOptions
+	shaderOpts.Images[0] = f.fpim
+	shaderOpts.Images[1] = f.hpim
+	shaderOpts.Images[2] = f.fim
+	shaderOpts.Images[3] = f.hwim
+
+	// draw shader
+	indices := []uint16{0, 1, 2, 2, 1, 3} // map vertices to triangles
+	f.gradientImg.DrawTrianglesShader(vertices[:], indices, f.gradient, &shaderOpts)
+	{
+		var bbs []byte
+		sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&bbs))
+		sliceHeader.Cap = int(len(f.gradient_bitmap) * 4)
+		sliceHeader.Len = int(len(f.gradient_bitmap) * 4)
+		sliceHeader.Data = uintptr(unsafe.Pointer(&f.gradient_bitmap[0]))
+		//f.fpim.ReplacePixels(bbs)
+		f.gradientImg.ReadPixels(bbs)
+	}
 }

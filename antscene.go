@@ -563,6 +563,8 @@ func (as *AntScene) Update(g *Game[GameState], st *GameState) error {
 	// 	// }
 	// }
 
+	as.field.GenerateGradient()
+
 	as.st = st
 	if err := as.HandleInput(g); err != nil {
 		return err

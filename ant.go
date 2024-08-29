@@ -1,13 +1,33 @@
 package main
 
 import (
-	"fmt"
 	"math/rand"
 
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
 type direction int
+
+const (
+	FoodNone = 0
+	FoodN    = 0b1
+	FoodNE   = 0b10
+	FoodE    = 0b100               //1 << 2
+	FoodSE   = 0b1000              //1 << 3
+	FoodS    = 0b10000             //1 << 4
+	FoodSW   = 0b100000            //1 << 5
+	FoodW    = 0b1000000           //1 << 6
+	FoodNW   = 0b10000000          //1 << 7
+	HomeNone = 0b100000000         //1 << 8
+	HomeN    = 0b1000000000        //1 << 9
+	HomeNE   = 0b10000000000       //1 << 10
+	HomeE    = 0b100000000000      //1 << 11
+	HomeSE   = 0b1000000000000     //1 << 12
+	HomeS    = 0b10000000000000    //1 << 13
+	HomeSW   = 0b100000000000000   //1 << 14
+	HomeW    = 0b1000000000000000  //1 << 15
+	HomeNW   = 0b10000000000000000 //1 << 16
+)
 
 const (
 	N direction = iota
@@ -485,106 +505,134 @@ func (a *Ant) Move(an *AntScene) {
 	// get stuck following very tight lines, and never explore.
 	//fmt.Printf("Dizziness: %d\n", a.dizziness)
 	if n := rand.Intn(10); n == 0 {
-		// straight := a.SumOctant(an, a.dir, 50)
-		// left := a.SumOctant(an, a.dir.Left(1), 50)
-		// right := a.SumOctant(an, a.dir.Right(1), 50)
+		// straight := a.Line(an, a.dir, an.st.sight)
+		// left := a.Line(an, a.dir.Left(1), an.st.sight)
+		// lleft := a.Line(an, a.dir.Left(2), an.st.sight)
+		// right := a.Line(an, a.dir.Right(1), an.st.sight)
+		// rright := a.Line(an, a.dir.Right(2), an.st.sight)
 
-		//const sight = 50
-		//const sight = 10
-		straight := a.Line(an, a.dir, an.st.sight)
-		left := a.Line(an, a.dir.Left(1), an.st.sight)
-		lleft := a.Line(an, a.dir.Left(2), an.st.sight)
-		right := a.Line(an, a.dir.Right(1), an.st.sight)
-		rright := a.Line(an, a.dir.Right(2), an.st.sight)
+		// if straight.FoodPher < 0 || right.FoodPher < 0 || left.FoodPher < 0 {
+		// 	panic(fmt.Sprintf("Ant(%d,%d,%d): Less that zero: straight: %#v, left: %#v, right: %#v, lleft: %#v, rright: %#v",
+		// 		a.pos.x, a.pos.y, a.dir, straight, left, right, lleft, rright))
+		// }
 
-		if straight.FoodPher < 0 || right.FoodPher < 0 || left.FoodPher < 0 {
-			panic(fmt.Sprintf("Ant(%d,%d,%d): Less that zero: straight: %#v, left: %#v, right: %#v, lleft: %#v, rright: %#v",
-				a.pos.x, a.pos.y, a.dir, straight, left, right, lleft, rright))
-		}
+		// // Directions include weighted values of their left and right directions
+		// straight.FoodPher += left.FoodPher/2 + right.FoodPher/2
+		// straight.HomePher += left.HomePher/2 + right.HomePher/2
+		// left.FoodPher += lleft.FoodPher/2 + straight.FoodPher/2
+		// left.HomePher += lleft.HomePher/2 + straight.HomePher/2
+		// right.FoodPher += rright.FoodPher/2 + straight.FoodPher/2
+		// right.HomePher += rright.HomePher/2 + straight.HomePher/2
 
-		// Directions include weighted values of their left and right directions
-		straight.FoodPher += left.FoodPher/2 + right.FoodPher/2
-		straight.HomePher += left.HomePher/2 + right.HomePher/2
-		left.FoodPher += lleft.FoodPher/2 + straight.FoodPher/2
-		left.HomePher += lleft.HomePher/2 + straight.HomePher/2
-		right.FoodPher += rright.FoodPher/2 + straight.FoodPher/2
-		right.HomePher += rright.HomePher/2 + straight.HomePher/2
+		//followingPher := false
+		if a.food > 0 {
 
-		followingPher := false
-		if a.food > 0 { //|| a.life < antlife/2 { // go home if we have food or we need food
-			// if rightPower > straightPower && rightPower > leftPower {
+			// if right.HomePher > straight.HomePher && right.HomePher > left.HomePher {
 			// 	a.dir = a.dir.Right(1)
 			// 	followingPher = true
-			// } else if leftPower > straightPower && leftPower > rightPower {
+			// } else if left.HomePher > straight.HomePher && left.HomePher > right.HomePher {
 			// 	a.dir = a.dir.Left(1)
 			// 	followingPher = true
+			// } else if straight.HomePher > left.HomePher && straight.HomePher > right.HomePher {
+			// 	followingPher = true
 			// }
-			if right.HomePher > straight.HomePher && right.HomePher > left.HomePher {
-				a.dir = a.dir.Right(1)
-				followingPher = true
-			} else if left.HomePher > straight.HomePher && left.HomePher > right.HomePher {
-				a.dir = a.dir.Left(1)
-				followingPher = true
-			} else if straight.HomePher > left.HomePher && straight.HomePher > right.HomePher {
-				followingPher = true
+
+			gr := an.field.gradient_bitmap[a.pos.x+a.pos.y*an.field.width]
+			switch gr & 0xFFFFFF00 {
+			case HomeN:
+				a.dir = N
+			case HomeNE:
+				a.dir = NE
+			case HomeE:
+				a.dir = E
+			case HomeSE:
+				a.dir = SE
+			case HomeS:
+				a.dir = S
+			case HomeSW:
+				a.dir = SW
+			case HomeW:
+				a.dir = W
+			case HomeNW:
+				a.dir = NW
 			}
+
 		} else {
-			if an.st.antisocial {
-				if straight.Wall {
-					straight.HomePher += pheromoneMax * an.st.sight
-				}
-				if left.Wall {
-					left.HomePher += pheromoneMax * an.st.sight
-				}
-				if right.Wall {
-					right.HomePher += pheromoneMax * an.st.sight
-				}
-				straightPower := straight.HomePher - (straight.FoodPher * 2)
-				leftPower := left.HomePher - (left.FoodPher * 2)
-				rightPower := right.HomePher - (right.FoodPher * 2)
+			// if an.st.antisocial {
+			// 	if straight.Wall {
+			// 		straight.HomePher += pheromoneMax * an.st.sight
+			// 	}
+			// 	if left.Wall {
+			// 		left.HomePher += pheromoneMax * an.st.sight
+			// 	}
+			// 	if right.Wall {
+			// 		right.HomePher += pheromoneMax * an.st.sight
+			// 	}
+			// 	straightPower := straight.HomePher - (straight.FoodPher * 2)
+			// 	leftPower := left.HomePher - (left.FoodPher * 2)
+			// 	rightPower := right.HomePher - (right.FoodPher * 2)
 
-				if rightPower < straightPower && rightPower < leftPower {
-					a.dir = a.dir.Right(1)
-					//followingPher = true
-				} else if leftPower < straightPower && leftPower < rightPower {
-					a.dir = a.dir.Left(1)
-					//followingPher = true
-				}
-			} else {
-				if right.FoodPher > straight.FoodPher && right.FoodPher > left.FoodPher {
-					a.dir = a.dir.Right(1)
-					followingPher = true
-				} else if left.FoodPher > straight.FoodPher && left.FoodPher > right.FoodPher {
-					a.dir = a.dir.Left(1)
-					followingPher = true
-				} else if straight.FoodPher > left.FoodPher && straight.FoodPher > right.FoodPher {
-					followingPher = true
-				}
+			// 	if rightPower < straightPower && rightPower < leftPower {
+			// 		a.dir = a.dir.Right(1)
+			// 		//followingPher = true
+			// 	} else if leftPower < straightPower && leftPower < rightPower {
+			// 		a.dir = a.dir.Left(1)
+			// 		//followingPher = true
+			// 	}
+			// } else {
+			// 	if right.FoodPher > straight.FoodPher && right.FoodPher > left.FoodPher {
+			// 		a.dir = a.dir.Right(1)
+			// 		followingPher = true
+			// 	} else if left.FoodPher > straight.FoodPher && left.FoodPher > right.FoodPher {
+			// 		a.dir = a.dir.Left(1)
+			// 		followingPher = true
+			// 	} else if straight.FoodPher > left.FoodPher && straight.FoodPher > right.FoodPher {
+			// 		followingPher = true
+			// 	}
+			// }
+			gr := an.field.gradient_bitmap[a.pos.x+a.pos.y*an.field.width]
+			switch gr & 0xFF {
+			case FoodN:
+				a.dir = N
+			case FoodNE:
+				a.dir = NE
+			case FoodE:
+				a.dir = E
+			case FoodSE:
+				a.dir = SE
+			case FoodS:
+				a.dir = S
+			case FoodSW:
+				a.dir = SW
+			case FoodW:
+				a.dir = W
+			case FoodNW:
+				a.dir = NW
 			}
 		}
 
-		if an.st.followWalls {
-			if !followingPher {
-				if lleft.Wall {
-					if left.Wall {
-						if straight.Wall {
-							a.dir = a.dir.Right(1)
-						}
-					} else {
-						a.dir = a.dir.Left(1)
-					}
-				}
-				if rright.Wall {
-					if right.Wall {
-						if straight.Wall {
-							a.dir = a.dir.Left(1)
-						}
-					} else {
-						a.dir = a.dir.Right(1)
-					}
-				}
-			}
-		}
+		// if an.st.followWalls {
+		// 	if !followingPher {
+		// 		if lleft.Wall {
+		// 			if left.Wall {
+		// 				if straight.Wall {
+		// 					a.dir = a.dir.Right(1)
+		// 				}
+		// 			} else {
+		// 				a.dir = a.dir.Left(1)
+		// 			}
+		// 		}
+		// 		if rright.Wall {
+		// 			if right.Wall {
+		// 				if straight.Wall {
+		// 					a.dir = a.dir.Left(1)
+		// 				}
+		// 			} else {
+		// 				a.dir = a.dir.Right(1)
+		// 			}
+		// 		}
+		// 	}
+		// }
 
 		// Take a random turn every once in a while
 		n := rand.Intn(10)
