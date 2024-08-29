@@ -583,10 +583,10 @@ func (as *AntScene) Update(g *Game[GameState], st *GameState) error {
 		}
 	}
 
-	if frame%10 == 0 {
-		fmt.Printf("n: %d, homefood: %d, ants: %d, ratio: %d / %d \n",
-			n, as.homelife, len(as.ants), as.homelife/(int64(st.antlife)*int64(st.stockpile)), len(as.ants))
-	}
+	// if frame%10 == 0 {
+	// 	fmt.Printf("n: %d, homefood: %d, ants: %d, ratio: %d / %d \n",
+	// 		n, as.homelife, len(as.ants), as.homelife/(int64(st.antlife)*int64(st.stockpile)), len(as.ants))
+	// }
 
 	// partsize := (len(as.ants) / workers) + 1
 	// for i := 0; i < workers; i++ {
@@ -616,10 +616,9 @@ func (as *AntScene) Update(g *Game[GameState], st *GameState) error {
 	// newfoodPherMaxPresent = 1
 	// newhomePherMaxPresent = 1
 
-	// if st.gpu {
-	// 	as.field.UpdatePher(as.st)
-	// } else
-	if st.parallel {
+	if st.gpu {
+		as.field.UpdatePher(as.st)
+	} else if st.parallel {
 		as.pherwg.Add(workers)
 		for i := 0; i < workers; i++ {
 			as.pherworkerTrigger[i] <- struct{}{}

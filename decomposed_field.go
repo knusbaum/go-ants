@@ -40,8 +40,8 @@ type DField struct {
 	//frw    sync.RWMutex
 	//hrw    sync.RWMutex
 
-	intermediateDST *ebiten.Image
-	intermediateSRC *ebiten.Image
+	intermediateSRC2 *ebiten.Image
+	intermediateSRC  *ebiten.Image
 }
 
 func (f *DField) GetHomeWall(x, y int) uint8 {
@@ -224,15 +224,16 @@ func NewDField(width, height int) (*DField, error) {
 		home_wall: make([]uint32, width*height),
 		renderbuf: make([]uint32, width*height),
 		//valToColor: toColor,
-		width:           width,
-		height:          height,
-		shader:          shader,
-		fader:           fader,
-		fpim:            ebiten.NewImage(WIDTH, HEIGHT),
-		hpim:            ebiten.NewImage(WIDTH, HEIGHT),
-		fim:             ebiten.NewImage(WIDTH, HEIGHT),
-		hwim:            ebiten.NewImage(WIDTH, HEIGHT),
-		intermediateSRC: ebiten.NewImage(WIDTH, HEIGHT),
+		width:            width,
+		height:           height,
+		shader:           shader,
+		fader:            fader,
+		fpim:             ebiten.NewImage(WIDTH, HEIGHT),
+		hpim:             ebiten.NewImage(WIDTH, HEIGHT),
+		fim:              ebiten.NewImage(WIDTH, HEIGHT),
+		hwim:             ebiten.NewImage(WIDTH, HEIGHT),
+		intermediateSRC:  ebiten.NewImage(WIDTH, HEIGHT),
+		intermediateSRC2: ebiten.NewImage(WIDTH, HEIGHT),
 	}
 	return f, nil
 }
@@ -339,82 +340,83 @@ func (f *DField) fade(st *GameState, data []uint32, dsti *ebiten.Image) {
 	//fmt.Printf("homepher: %X(%d) -> %X(%d)\n", start, start, f.homepher[200+200*f.width], f.homepher[200+200*f.width])
 }
 
+// This appears to be slower than the parallel CPU implementation (AntScene.UpdatePherPartial)
 func (f *DField) UpdatePher(st *GameState) {
-	f.fade(st, f.homepher, f.hpim)
-	f.fade(st, f.foodpher, f.fpim)
-	// start := f.homepher[200+200*f.width]
-	// //runShaderOn(st, f.fader, f.homepher, f.width)
-	// //src := ebiten.NewImage(f.width, f.height)
-	// //dst := ebiten.NewImage(f.width, f.height)
-	// src := f.intermediateSRC
-	// dst := f.
-	// 	//src.Clear()
-	// 	dst.Clear()
-	// {
+	//f.fade(st, f.homepher, f.hpim)
+	//f.fade(st, f.foodpher, f.fpim)
 
-	// 	var bbs []byte
-	// 	sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&bbs))
-	// 	sliceHeader.Cap = int(len(f.homepher) * 4)
-	// 	sliceHeader.Len = int(len(f.homepher) * 4)
-	// 	sliceHeader.Data = uintptr(unsafe.Pointer(&f.homepher[0]))
-	// 	//f.hpim.ReplacePixels(bbs)
-	// 	src.WritePixels(bbs)
-	// }
-	// // {
-	// // 	var bbs []byte
-	// // 	sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&bbs))
-	// // 	sliceHeader.Cap = int(len(f.homepher) * 4)
-	// // 	sliceHeader.Len = int(len(f.homepher) * 4)
-	// // 	sliceHeader.Data = uintptr(unsafe.Pointer(&f.homepher[0]))
-	// // 	f.hpim.ReplacePixels(bbs)
-	// // }
+	{
+		f.fpim.Clear()
+		f.hpim.Clear()
+		{
+			var bbs []byte
+			sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&bbs))
+			sliceHeader.Cap = int(len(f.foodpher) * 4)
+			sliceHeader.Len = int(len(f.foodpher) * 4)
+			sliceHeader.Data = uintptr(unsafe.Pointer(&f.foodpher[0]))
+			f.intermediateSRC.WritePixels(bbs)
+		}
+		{
+			var bbs []byte
+			sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&bbs))
+			sliceHeader.Cap = int(len(f.homepher) * 4)
+			sliceHeader.Len = int(len(f.homepher) * 4)
+			sliceHeader.Data = uintptr(unsafe.Pointer(&f.homepher[0]))
+			f.intermediateSRC2.WritePixels(bbs)
+		}
 
-	// var vertices [4]ebiten.Vertex
-	// // map the vertices to the target image
-	// bounds := dst.Bounds()
-	// vertices[0].DstX = float32(bounds.Min.X) // top-left
-	// vertices[0].DstY = float32(bounds.Min.Y) // top-left
-	// vertices[1].DstX = float32(bounds.Max.X) // top-right
-	// vertices[1].DstY = float32(bounds.Min.Y) // top-right
-	// vertices[2].DstX = float32(bounds.Min.X) // bottom-left
-	// vertices[2].DstY = float32(bounds.Max.Y) // bottom-left
-	// vertices[3].DstX = float32(bounds.Max.X) // bottom-right
-	// vertices[3].DstY = float32(bounds.Max.Y) // bottom-right
+		var vertices [4]ebiten.Vertex
+		// map the vertices to the target image
+		bounds := f.fpim.Bounds()
+		vertices[0].DstX = float32(bounds.Min.X) // top-left
+		vertices[0].DstY = float32(bounds.Min.Y) // top-left
+		vertices[1].DstX = float32(bounds.Max.X) // top-right
+		vertices[1].DstY = float32(bounds.Min.Y) // top-right
+		vertices[2].DstX = float32(bounds.Min.X) // bottom-left
+		vertices[2].DstY = float32(bounds.Max.Y) // bottom-left
+		vertices[3].DstX = float32(bounds.Max.X) // bottom-right
+		vertices[3].DstY = float32(bounds.Max.Y) // bottom-right
 
-	// // set the source image sampling coordinates
-	// srcBounds := src.Bounds()
-	// vertices[0].SrcX = float32(srcBounds.Min.X) // top-left
-	// vertices[0].SrcY = float32(srcBounds.Min.Y) // top-left
-	// vertices[1].SrcX = float32(srcBounds.Max.X) // top-right
-	// vertices[1].SrcY = float32(srcBounds.Min.Y) // top-right
-	// vertices[2].SrcX = float32(srcBounds.Min.X) // bottom-left
-	// vertices[2].SrcY = float32(srcBounds.Max.Y) // bottom-left
-	// vertices[3].SrcX = float32(srcBounds.Max.X) // bottom-right
-	// vertices[3].SrcY = float32(srcBounds.Max.Y) // bottom-right
+		// set the source image sampling coordinates
+		srcBounds := f.intermediateSRC.Bounds()
+		vertices[0].SrcX = float32(srcBounds.Min.X) // top-left
+		vertices[0].SrcY = float32(srcBounds.Min.Y) // top-left
+		vertices[1].SrcX = float32(srcBounds.Max.X) // top-right
+		vertices[1].SrcY = float32(srcBounds.Min.Y) // top-right
+		vertices[2].SrcX = float32(srcBounds.Min.X) // bottom-left
+		vertices[2].SrcY = float32(srcBounds.Max.Y) // bottom-left
+		vertices[3].SrcX = float32(srcBounds.Max.X) // bottom-right
+		vertices[3].SrcY = float32(srcBounds.Max.Y) // bottom-right
 
-	// // triangle shader options
-	// var shaderOpts ebiten.DrawTrianglesShaderOptions
-	// shaderOpts.Uniforms = make(map[string]any)
-	// shaderOpts.Uniforms["FadeDivisor"] = st.fadedivisor
-	// shaderOpts.Images[0] = src
+		// triangle shader options
+		var shaderOpts ebiten.DrawTrianglesShaderOptions
+		shaderOpts.Uniforms = make(map[string]any)
+		shaderOpts.Uniforms["FadeDivisor"] = st.fadedivisor
+		shaderOpts.Images[0] = f.intermediateSRC
 
-	// // draw shader
-	// indices := []uint16{0, 1, 2, 2, 1, 3} // map vertices to triangles
-	// dst.DrawTrianglesShader(vertices[:], indices, f.fader, &shaderOpts)
+		// draw shader
+		indices := []uint16{0, 1, 2, 2, 1, 3} // map vertices to triangles
+		f.fpim.DrawTrianglesShader(vertices[:], indices, f.fader, &shaderOpts)
+		shaderOpts.Images[0] = f.intermediateSRC2
+		f.hpim.DrawTrianglesShader(vertices[:], indices, f.fader, &shaderOpts)
+		{
+			var bbs []byte
+			sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&bbs))
+			sliceHeader.Cap = int(len(f.foodpher) * 4)
+			sliceHeader.Len = int(len(f.foodpher) * 4)
+			sliceHeader.Data = uintptr(unsafe.Pointer(&f.foodpher[0]))
+			f.fpim.ReadPixels(bbs)
+		}
+		{
+			var bbs []byte
+			sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&bbs))
+			sliceHeader.Cap = int(len(f.homepher) * 4)
+			sliceHeader.Len = int(len(f.homepher) * 4)
+			sliceHeader.Data = uintptr(unsafe.Pointer(&f.homepher[0]))
+			f.hpim.ReadPixels(bbs)
+		}
+	}
 
-	// {
-	// 	var bbs []byte
-	// 	sliceHeader := (*reflect.SliceHeader)(unsafe.Pointer(&bbs))
-	// 	sliceHeader.Cap = int(len(f.homepher) * 4)
-	// 	sliceHeader.Len = int(len(f.homepher) * 4)
-	// 	sliceHeader.Data = uintptr(unsafe.Pointer(&f.homepher[0]))
-	// 	dst.ReadPixels(bbs)
-	// }
-
-	// fmt.Printf("homepher: %X(%d) -> %X(%d)\n", start, start, f.homepher[200+200*f.width], f.homepher[200+200*f.width])
-	// //}
-
-	// //f.hpim.DrawTrianglesShader(vertices[:], indices, f.fader, &shaderOpts)
 }
 
 func (f *DField) GPURender(as *AntScene, r *ebiten.Image) error {
@@ -426,7 +428,7 @@ func (f *DField) GPURender(as *AntScene, r *ebiten.Image) error {
 		sliceHeader.Cap = int(len(f.foodpher) * 4)
 		sliceHeader.Len = int(len(f.foodpher) * 4)
 		sliceHeader.Data = uintptr(unsafe.Pointer(&f.foodpher[0]))
-		f.fpim.ReplacePixels(bbs)
+		f.fpim.WritePixels(bbs)
 	}
 	{
 		var bbs []byte
@@ -434,7 +436,7 @@ func (f *DField) GPURender(as *AntScene, r *ebiten.Image) error {
 		sliceHeader.Cap = int(len(f.homepher) * 4)
 		sliceHeader.Len = int(len(f.homepher) * 4)
 		sliceHeader.Data = uintptr(unsafe.Pointer(&f.homepher[0]))
-		f.hpim.ReplacePixels(bbs)
+		f.hpim.WritePixels(bbs)
 	}
 	{
 		var bbs []byte
@@ -442,7 +444,7 @@ func (f *DField) GPURender(as *AntScene, r *ebiten.Image) error {
 		sliceHeader.Cap = int(len(f.food) * 4)
 		sliceHeader.Len = int(len(f.food) * 4)
 		sliceHeader.Data = uintptr(unsafe.Pointer(&f.food[0]))
-		f.fim.ReplacePixels(bbs)
+		f.fim.WritePixels(bbs)
 	}
 	{
 		var bbs []byte
@@ -450,7 +452,7 @@ func (f *DField) GPURender(as *AntScene, r *ebiten.Image) error {
 		sliceHeader.Cap = int(len(f.home_wall) * 4)
 		sliceHeader.Len = int(len(f.home_wall) * 4)
 		sliceHeader.Data = uintptr(unsafe.Pointer(&f.home_wall[0]))
-		f.hwim.ReplacePixels(bbs)
+		f.hwim.WritePixels(bbs)
 	}
 
 	var vertices [4]ebiten.Vertex

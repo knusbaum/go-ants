@@ -3,18 +3,34 @@ package main
 
 var FadeDivisor int
 
+// Decodes a vec4 RGBA into a uint32
+func ToUint32(v vec4) int {
+	return (int(v.a*255) << 24) |
+		(int(v.b*255) << 16) |
+		(int(v.g*255) << 8) |
+		int(v.r*255)
+}
+
+// Encodes a uint32 into a vec4 RGBA
+func FromUint32(i int) vec4 {
+	return vec4(
+		float(i&0xFF)/255,
+		float((i>>8)&0xFF)/255,
+		float((i>>16)&0xFF)/255,
+		float((i>>24)&0xFF)/255,
+	)
+}
+
 func Fragment(targetCoords vec4, sourceCoords vec2, _ vec4) vec4 {
 
 	foodC := imageSrc0At(sourceCoords)
-	//foodC := imageDstAt(targetCoords)
-	foodi := (int(foodC.a*255) << 24) | (int(foodC.b*255) << 16) | (int(foodC.g*255) << 8) | int(foodC.r*255)
+	foodi := ToUint32(foodC) //(int(foodC.a*255) << 24) | (int(foodC.b*255) << 16) | (int(foodC.g*255) << 8) | int(foodC.r*255)
 
 	if foodi > 0 {
 		foodi = foodi - ((foodi / FadeDivisor) + 1)
 	}
-	//foodi = foodi - 1
 
-	return vec4(float(foodi&0xFF)/255, float((foodi>>8)&0xFF)/255, float((foodi>>16)&0xFF)/255, float((foodi>>24)&0xFF)/255)
+	return FromUint32(foodi) //vec4(float(foodi&0xFF)/255, float((foodi>>8)&0xFF)/255, float((foodi>>16)&0xFF)/255, float((foodi>>24)&0xFF)/255)
 	//return foodC
 	//return vec4(0.2, 0.4, 0.6, 0.8)
 	//return 0

@@ -9,6 +9,13 @@ const (
 	e_wall = 2
 )
 
+func ToUint32(v vec4) int {
+	return (int(v.a*255) << 24) |
+		(int(v.b*255) << 16) |
+		(int(v.g*255) << 8) |
+		int(v.r*255)
+}
+
 func Fragment(targetCoords vec4, sourceCoords vec2, _ vec4) vec4 {
 	//return vec4(1, 0, 0, 1)
 
@@ -29,8 +36,8 @@ func Fragment(targetCoords vec4, sourceCoords vec2, _ vec4) vec4 {
 	foodC := imageSrc0At(sourceCoords)
 	homeC := imageSrc1At(sourceCoords)
 
-	foodi := (int(foodC.a*255) << 24) | (int(foodC.b*255) << 16) | (int(foodC.g*255) << 8) | int(foodC.r*255)
-	homei := (int(homeC.a*255) << 24) | (int(homeC.b*255) << 16) | (int(homeC.g*255) << 8) | int(homeC.r*255)
+	foodi := ToUint32(foodC) //(int(foodC.a*255) << 24) | (int(foodC.b*255) << 16) | (int(foodC.g*255) << 8) | int(foodC.r*255)
+	homei := ToUint32(homeC) //(int(homeC.a*255) << 24) | (int(homeC.b*255) << 16) | (int(homeC.g*255) << 8) | int(homeC.r*255)
 
 	gf := float(foodi>>pherShift) / 255
 	rf := float(homei>>pherShift) / 255
