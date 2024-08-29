@@ -108,7 +108,7 @@ func main() {
 	g := NewGame[GameState](WIDTH, HEIGHT, NewGameState(WIDTH, HEIGHT)) //&Game[GameState]{}
 	//as := &AntScene{homelife: 3000 * 10000}
 	as := &AntScene{homelife: 3000 * 10000 * 100}
-	as.ants = make([]Ant, 200000)
+	as.ants = make([]Ant, 2000000)
 	err = g.PushScene(as)
 	if err != nil {
 		log.Fatal(err)

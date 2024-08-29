@@ -147,7 +147,8 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 		for x := 0; x < 100; x++ {
 			for y := 0; y < 100; y++ {
 				//as.field.Get(x, y).Home = true
-				as.field.home[as.field.Idx(x, y)] = true
+				//as.field.home[as.field.Idx(x, y)] = true
+				as.field.SetHomeWall(x, y, e_home)
 				as.field.Update(as, x, y)
 			}
 		}
@@ -156,15 +157,17 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 		as.field.Clear(as)
 		for y := 0; y < g.height; y++ {
 			for x := 0; x < g.width; x++ {
-				i := as.field.Idx(x, y)
-				as.field.wall[i] = true
+				//i := as.field.Idx(x, y)
+				//as.field.wall[i] = true
+				as.field.SetHomeWall(x, y, e_wall)
 				as.field.Update(as, x, y)
 			}
 		}
 
 		for x := 0; x < 100; x++ {
 			for y := 0; y < 100; y++ {
-				as.field.home[as.field.Idx(x, y)] = true
+				//as.field.home[as.field.Idx(x, y)] = true
+				as.field.SetHomeWall(x, y, e_home)
 				as.field.Update(as, x, y)
 			}
 		}
@@ -191,6 +194,8 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 		g.state.renderAnts = !g.state.renderAnts
 	} else if inpututil.IsKeyJustPressed(ebiten.KeyQ) {
 		g.state.cluster = !g.state.cluster
+	} else if inpututil.IsKeyJustPressed(ebiten.KeyV) {
+		g.state.gpu = !g.state.gpu
 	}
 
 	distance := func(x0, y0, x1, y1 int) int {
@@ -224,10 +229,12 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 		//if mx != as.mousePX || my != as.mousePY {
 		doLine(mx, my, as.mousePX, as.mousePY, func(cx, cy int) {
 			doSpot(cx, cy, func(x, y, idx int) {
-				if as.field.home[idx] {
+				//if as.field.home[idx] {
+				if as.field.GetHomeWall(x, y) == e_home {
 					return
 				}
-				as.field.wall[idx] = true
+				as.field.SetHomeWall(x, y, e_wall)
+				//as.field.wall[idx] = true
 				//spot.Home = false
 				as.field.food[idx] = 0
 				as.field.Update(as, x, y)
@@ -240,7 +247,8 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 		//if mx != as.mousePX || my != as.mousePY {
 		doLine(mx, my, as.mousePX, as.mousePY, func(cx, cy int) {
 			doSpot(cx, cy, func(x, y, idx int) {
-				as.field.wall[idx] = false
+				//as.field.wall[idx] = false
+				as.field.SetHomeWall(x, y, e_none)
 				//spot.Home = false
 				as.field.food[idx] = 0
 				as.field.Update(as, x, y)
@@ -253,9 +261,10 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 		//if mx != as.mousePX || my != as.mousePY {
 		doLine(mx, my, as.mousePX, as.mousePY, func(cx, cy int) {
 			doSpot(cx, cy, func(x, y, idx int) {
-				as.field.wall[idx] = false
+				//as.field.wall[idx] = false
+				as.field.SetHomeWall(x, y, e_none)
 				//spot.Home = false
-				as.field.food[idx] = as.st.foodcount
+				as.field.food[idx] = uint32(as.st.foodcount)
 				as.field.Update(as, x, y)
 			})
 		})
@@ -355,6 +364,9 @@ func drawAntTextures(c color.Color) []*ebiten.Image {
 }
 
 func (as *AntScene) Init(g *Game[GameState], st *GameState) error {
+	for i := range myv {
+		myv[i] = 0x108B
+	}
 	as.st = st
 	as.pause = true
 	f, err := NewDField(g.width, g.height)
@@ -378,16 +390,18 @@ func (as *AntScene) Init(g *Game[GameState], st *GameState) error {
 	for y := 0; y < g.height; y++ {
 		for x := 0; x < g.width; x++ {
 			//as.field.Get(x, y).Wall = true
-			as.field.wall[as.field.Idx(x, y)] = true
+			//as.field.wall[as.field.Idx(x, y)] = true
+			as.field.SetHomeWall(x, y, e_wall)
 			as.field.Update(as, x, y)
 		}
 	}
 
 	for x := 0; x < 100; x++ {
 		for y := 0; y < 100; y++ {
-			idx := as.field.Idx(x, y)
-			as.field.wall[idx] = false
-			as.field.home[idx] = true
+			//idx := as.field.Idx(x, y)
+			//as.field.wall[idx] = false
+			//as.field.home[idx] = true
+			as.field.SetHomeWall(x, y, e_home)
 			as.field.Update(as, x, y)
 		}
 	}
@@ -497,15 +511,21 @@ func (as *AntScene) UpdatePherPartial(start, end int) {
 		for x := 0; x < as.field.width; x++ {
 			update := false
 			//spot := as.field.Get(x, y)
-			idx := as.field.Idx(x, y)
-			if as.field.foodpher[idx] > 0 { //spot.FoodPher > 0 {
+			//idx := as.field.Idx(x, y)
+			//if as.field.foodpher[idx] > 0 { //spot.FoodPher > 0 {
+			fp := as.field.GetFoodPher(x, y)
+			if fp > 0 {
 				//spot.FoodPher -= (spot.FoodPher / as.st.fadedivisor) + 1
-				as.field.foodpher[idx] -= (as.field.foodpher[idx] / as.st.fadedivisor) + 1
+				//as.field.foodpher[idx] -= (as.field.foodpher[idx] / uint32(as.st.fadedivisor)) + 1
+				as.field.SetFoodPher(x, y, fp-((fp/as.st.fadedivisor)+1))
 				update = true
 			}
-			if as.field.homepher[idx] > 0 {
+			hp := as.field.GetHomePher(x, y)
+			//if as.field.homepher[idx] > 0 {
+			if hp > 0 {
 				//spot.HomePher -= (spot.HomePher / as.st.fadedivisor) + 1
-				as.field.homepher[idx] -= (as.field.homepher[idx] / as.st.fadedivisor) + 1
+				//as.field.homepher[idx] -= (as.field.homepher[idx] / uint32(as.st.fadedivisor)) + 1
+				as.field.SetHomePher(x, y, hp-((hp/as.st.fadedivisor)+1))
 				update = true
 			}
 
@@ -516,8 +536,33 @@ func (as *AntScene) UpdatePherPartial(start, end int) {
 	}
 }
 
+var myv = make([]uint32, WIDTH*HEIGHT)
+
 // func (as *AntScene) Update(g *Game[GameState], r *sdl.Renderer, s *GameState) error {
 func (as *AntScene) Update(g *Game[GameState], st *GameState) error {
+	// { // TEST
+	// 	fader, err := ebiten.NewShader(faderProgram)
+	// 	if err != nil {
+	// 		fmt.Printf("Fatal, failed to compile shader: %v\n", err)
+	// 		os.Exit(1)
+	// 	}
+
+	// 	// v := make([]uint32, 4)
+	// 	// v[0] = 0x0000FFFF
+	// 	// v[1] = 0x00000000
+	// 	// v[2] = 0x99aabbcc
+	// 	// v[3] = 0xddeeff00
+
+	// 	runShaderOn(st, fader, myv, WIDTH)
+	// 	fmt.Printf("%#v\n", myv[200+200*WIDTH])
+	// 	//for _, vs := range myv {
+	// 	//	fmt.Printf("%#v\n", vs)
+	// 	//}
+	// 	// if v[0] != 0x11223344 {
+	// 	// 	log.Fatalf("EXPECTED 0x11223344 but got %8X", v[0])
+	// 	// }
+	// }
+
 	as.st = st
 	if err := as.HandleInput(g); err != nil {
 		return err
@@ -571,6 +616,9 @@ func (as *AntScene) Update(g *Game[GameState], st *GameState) error {
 	// newfoodPherMaxPresent = 1
 	// newhomePherMaxPresent = 1
 
+	// if st.gpu {
+	// 	as.field.UpdatePher(as.st)
+	// } else
 	if st.parallel {
 		as.pherwg.Add(workers)
 		for i := 0; i < workers; i++ {
@@ -778,9 +826,16 @@ func memsetRepeat(a []uint8, v uint8) {
 
 // func (as *AntScene) Render(g *Game[GameState], r *sdl.Renderer, s *GameState) error {
 func (as *AntScene) Draw(g *Game[GameState], st *GameState, screen *ebiten.Image) {
-	err := as.field.Render(as, screen)
-	if err != nil {
-		panic(err)
+	if st.gpu {
+		err := as.field.GPURender(as, screen)
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		err := as.field.Render(as, screen)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	if st.renderAnts {
@@ -898,8 +953,8 @@ func (as *AntScene) Draw(g *Game[GameState], st *GameState, screen *ebiten.Image
 			}
 		}
 	}
-	msg := fmt.Sprintf("FPS: %02.f, Ticks/Sec: %0.2f, Draw Radius: %d, Hive Life: %d, Ants: %d, Brush: %s, Cluster: %v",
-		ebiten.ActualFPS(), ebiten.ActualTPS(), st.drawradius, as.homelife, len(as.ants), as.st.leftmode, st.cluster)
+	msg := fmt.Sprintf("FPS: %02.f, Ticks/Sec: %0.2f, Draw Radius: %d, Hive Life: %d, Ants: %d, Brush: %s, Cluster: %v, GPU: %v",
+		ebiten.ActualFPS(), ebiten.ActualTPS(), st.drawradius, as.homelife, len(as.ants), as.st.leftmode, st.cluster, st.gpu)
 	start := antsceneFontSize * 2
 	text.Draw(screen, msg, mplusNormalFont, 10, start, color.White)
 	text.Draw(screen, "(M) menu", mplusNormalFont, 10, start+antsceneFontSpace, color.White)

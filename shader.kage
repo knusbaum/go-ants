@@ -1,0 +1,46 @@
+//kage:unit pixels
+package main
+
+const pherShift = 5 //(2^13 = 8192), meaning 8192 is within 13 bits range, We want to shift that to 8 bits, so shift 5 out.
+
+const (
+	e_none = 0
+	e_home = 1
+	e_wall = 2
+)
+
+func Fragment(targetCoords vec4, sourceCoords vec2, _ vec4) vec4 {
+	//return vec4(1, 0, 0, 1)
+
+	food := imageSrc2At(sourceCoords)
+	v := food.r + food.b + food.g + food.a
+	if v > 0 {
+		return vec4(0, 1, 0, 1)
+	}
+
+	hwim := imageSrc3At(sourceCoords)
+	hwenum := int(hwim.r * 255)
+	if hwenum == e_wall {
+		return vec4(0.2, 0.2, 0.2, 1)
+	} else if hwenum == e_home {
+		return vec4(1, 0.2, 0.2, 1)
+	}
+
+	foodC := imageSrc0At(sourceCoords)
+	homeC := imageSrc1At(sourceCoords)
+
+	foodi := (int(foodC.a*255) << 24) | (int(foodC.b*255) << 16) | (int(foodC.g*255) << 8) | int(foodC.r*255)
+	homei := (int(homeC.a*255) << 24) | (int(homeC.b*255) << 16) | (int(homeC.g*255) << 8) | int(homeC.r*255)
+
+	gf := float(foodi>>pherShift) / 255
+	rf := float(homei>>pherShift) / 255
+
+	//vg := foodi >> pherShift
+	//vg = (vg & 0xFF)
+
+	//vr := homei >> pherShift
+	//vr = (vr & 0xFF)
+
+	//return vec4(float(vr)/255, float(vg)/255, 0.0, 1.0)
+	return vec4(rf, gf, 0.0, 1.0)
+}

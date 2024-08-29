@@ -92,7 +92,8 @@ type Ant struct {
 func (a *Ant) WallAt(an *AntScene, d direction) bool {
 	np := a.pos.PointAt(d)
 	if np.Within(0, 0, an.st.width, an.st.height) {
-		return an.field.wall[np.x+np.y*an.field.width]
+		return an.field.GetHomeWall(np.x, np.y) == e_wall
+		//return an.field.wall[np.x+np.y*an.field.width]
 		//return an.field.vals[np.x+np.y*an.field.width].Wall
 		//return an.field.vals[a.idx].Wall
 		//return an.field.Get(np.x, np.y).Wall
@@ -182,16 +183,20 @@ func (a *Ant) Line(an *AntScene, d direction, size int) gridspot {
 	//addspot := func(g *gridspot) bool {
 	addspot := func(x, y int) bool {
 		idx := x + y*an.field.width
-		if an.field.wall[idx] {
+		//if an.field.wall[idx] {
+		if an.field.GetHomeWall(x, y) == e_wall {
 			pt.Wall = true
 			return false
 		}
 		// if g.Food < 0 {
 		// 	panic("g.FOOD < 0 \n")
 		// }
-		pt.FoodPher += an.field.foodpher[idx] + (an.field.food[idx] << 8) //g.Food*pheromoneMax*2
-		pt.HomePher += an.field.homepher[idx]
-		if an.field.home[idx] {
+		//pt.FoodPher += int(an.field.foodpher[idx]) + (an.field.food[idx] << 8) //g.Food*pheromoneMax*2
+		pt.FoodPher += an.field.GetFoodPher(x, y) + int(an.field.food[idx]<<8)
+		//pt.HomePher += int(an.field.homepher[idx])
+		pt.HomePher += int(an.field.GetHomePher(x, y))
+		//if an.field.home[idx] {
+		if an.field.GetHomeWall(x, y) == e_home {
 			pt.HomePher += pheromoneMax << 1 //* 2
 		}
 		return true
@@ -347,10 +352,15 @@ func (a *Ant) SumOctant(g *GameState, an *AntScene, d direction, size int) grids
 			//if p.Within(0, 0, WIDTH, HEIGHT) && !an.grid[x][y].Wall
 			if p.Within(0, 0, an.st.width, an.st.height) {
 				//spot := an.field.Get(x, y)
-				if !an.field.wall[x+y*an.field.width] {
-					pt.FoodPher += an.field.foodpher[x+y*an.field.width] + an.field.food[x+y*an.field.width]*100000 // - (an.grid[x][y].homePher / 4)
-					pt.HomePher += an.field.homepher[x+y*an.field.width]                                            // - (an.grid[x][y].foodPher / 4)
-					if an.field.home[x+y*an.field.width] {
+				//if !an.field.wall[x+y*an.field.width] {
+				if an.field.GetHomeWall(x, y) != e_wall {
+					//pt.FoodPher += int(an.field.foodpher[x+y*an.field.width]) + an.field.food[x+y*an.field.width]*100000 // - (an.grid[x][y].homePher / 4)
+					//pt.HomePher += int(an.field.homepher[x+y*an.field.width])                                            // - (an.grid[x][y].foodPher / 4)
+
+					pt.FoodPher += an.field.GetFoodPher(x, y) + int(an.field.food[x+y*an.field.width]*100000)
+					pt.HomePher += int(an.field.GetHomePher(x, y))
+					//if an.field.home[x+y*an.field.width] {
+					if an.field.GetHomeWall(x, y) == e_home {
 						pt.HomePher += 100000
 					}
 				}
@@ -388,7 +398,8 @@ func (a *Ant) Update(as *AntScene) bool {
 	}
 	aidx := as.field.Idx(a.pos.x, a.pos.y)
 	//if as.field.vals[a.idx].Home {
-	if as.field.home[aidx] {
+	//if as.field.home[aidx] {
+	if as.field.GetHomeWall(a.pos.x, a.pos.y) == e_home {
 		//if as.field.Get(a.pos.x, a.pos.y).Home {
 		if a.food > 0 {
 			as.homelife += int64(a.food) * int64(as.st.foodlife)
@@ -412,7 +423,7 @@ func (a *Ant) Update(as *AntScene) bool {
 				as.field.Update(as, a.pos.x, a.pos.y)
 				a.food = 10
 			} else {
-				a.food = food
+				a.food = int(food)
 				as.field.food[aidx] = 0
 				as.field.Update(as, a.pos.x, a.pos.y)
 			}
@@ -424,12 +435,14 @@ func (a *Ant) Update(as *AntScene) bool {
 		a.tex = as.fullTextures[a.dir]
 		//spot := as.field.vals[a.idx]
 		//spot := as.field.Get(a.pos.x, a.pos.y)
-		fp := as.field.foodpher[aidx]
+		//fp := int(as.field.foodpher[aidx])
+		fp := int(as.field.GetFoodPher(a.pos.x, a.pos.y))
 		if fp > a.marker {
 			a.marker = fp
 			a.marker -= (a.marker / antFadeDivisor(as.st.fadedivisor)) + 1
 		} else {
-			as.field.foodpher[aidx] = a.marker
+			//as.field.foodpher[aidx] = uint32(a.marker)
+			as.field.SetFoodPher(a.pos.x, a.pos.y, a.marker)
 			a.marker -= (a.marker / antFadeDivisor(as.st.fadedivisor)) + 1
 			if as.st.renderPher {
 				as.field.Update(as, a.pos.x, a.pos.y)
@@ -439,12 +452,14 @@ func (a *Ant) Update(as *AntScene) bool {
 		a.tex = as.textures[a.dir]
 		//spot := as.field.vals[a.idx]
 		//spot := as.field.Get(a.pos.x, a.pos.y)
-		hp := as.field.homepher[aidx]
+		//hp := int(as.field.homepher[aidx])
+		hp := as.field.GetHomePher(a.pos.x, a.pos.y)
 		if hp > a.marker {
 			a.marker = hp
 			a.marker -= (a.marker / antFadeDivisor(as.st.fadedivisor)) + 1
 		} else {
-			as.field.homepher[aidx] = a.marker
+			//as.field.homepher[aidx] = uint32(a.marker)
+			as.field.SetHomePher(a.pos.x, a.pos.y, a.marker)
 			a.marker -= (a.marker / antFadeDivisor(as.st.fadedivisor)) + 1
 			if as.st.renderPher {
 				as.field.Update(as, a.pos.x, a.pos.y)

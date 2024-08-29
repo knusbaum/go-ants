@@ -71,4 +71,5 @@ type GameState struct {
 	leftmode    clickmode
 	//sorttype    sorttype
 	cluster bool
+	gpu     bool
 }
