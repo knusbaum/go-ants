@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
+	_ "embed"
 	"encoding/gob"
 	"fmt"
 	"image/color"
+	"io"
 	"math"
 	"math/rand"
 	"os"
@@ -80,6 +83,9 @@ type renderwork struct {
 
 var _ Scene[GameState] = &AntScene{}
 
+//go:embed start.grid
+var startGrid []byte
+
 func (as *AntScene) SaveGrid() error {
 	f, err := os.Create("ants.grid")
 	if err != nil {
@@ -91,22 +97,45 @@ func (as *AntScene) SaveGrid() error {
 	return enc.Encode(as.field.vals)
 }
 
-func (as *AntScene) LoadGrid() error {
-	f, err := os.Open("ants.grid")
+func (as *AntScene) LoadGrid(name string) error {
+	f, err := os.Open(name)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 
-	enc := gob.NewDecoder(f)
+	return as.LoadGridReader(f)
+}
+
+func (as *AntScene) LoadGridReader(r io.Reader) error {
+	enc := gob.NewDecoder(r)
 	g := []gridspot{}
-	err = enc.Decode(&g)
+	err := enc.Decode(&g)
 	if err != nil {
 		return err
 	}
 	as.field.vals = g
 	as.field.UpdateAll()
 	return nil
+}
+
+func (as *AntScene) SetHome(g *Game[GameState]) {
+	doSpot(as, 30, g.width/2, g.height/2, func(x, y int, spot *gridspot) {
+		*spot = gridspot{}
+		spot.Home = true
+		as.field.Update(x, y)
+	})
+
+	// startx := g.width/2 - 50
+	// starty := g.height/2 - 50
+	// for y := 0; y < 100; y++ {
+	// 	for x := 0; x < 100; x++ {
+	// 		spot := as.field.Get(startx+x, starty+y)
+	// 		*spot = gridspot{}
+	// 		spot.Home = true
+	// 		as.field.Update(startx+x, starty+y)
+	// 	}
+	// }
 }
 
 // func (as *AntScene) HandleEvent(g *Game[GameState], r *sdl.Renderer, e sdl.Event) error {
@@ -133,7 +162,7 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 			fmt.Printf("Failed to save grid: %v\n", err)
 		}
 	} else if inpututil.IsKeyJustPressed(ebiten.KeyL) {
-		err := as.LoadGrid()
+		err := as.LoadGrid("ants.grid")
 		if err != nil {
 			fmt.Printf("Failed to Load grid: %v\n", err)
 		}
@@ -141,12 +170,13 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 		as.relocateAnts()
 	} else if inpututil.IsKeyJustPressed(ebiten.KeyC) {
 		as.field.Clear()
-		for x := 0; x < 100; x++ {
-			for y := 0; y < 100; y++ {
-				as.field.Get(x, y).Home = true
-				as.field.Update(x, y)
-			}
-		}
+		// for x := 0; x < 100; x++ {
+		// 	for y := 0; y < 100; y++ {
+		// 		as.field.Get(x, y).Home = true
+		// 		as.field.Update(x, y)
+		// 	}
+		// }
+		as.SetHome(g)
 		as.relocateAnts()
 	} else if inpututil.IsKeyJustPressed(ebiten.KeyF) {
 		for y := 0; y < g.height; y++ {
@@ -158,14 +188,15 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 			}
 		}
 
-		for x := 0; x < 100; x++ {
-			for y := 0; y < 100; y++ {
-				spot := as.field.Get(x, y)
-				*spot = gridspot{}
-				as.field.Get(x, y).Home = true
-				as.field.Update(x, y)
-			}
-		}
+		as.SetHome(g)
+		// for x := 0; x < 100; x++ {
+		// 	for y := 0; y < 100; y++ {
+		// 		spot := as.field.Get(x, y)
+		// 		*spot = gridspot{}
+		// 		as.field.Get(x, y).Home = true
+		// 		as.field.Update(x, y)
+		// 	}
+		// }
 	} else if inpututil.IsKeyJustPressed(ebiten.KeyX) {
 		as.st.parallel = !as.st.parallel
 		fmt.Printf("Parallel update: %t\n", as.st.parallel)
@@ -191,37 +222,37 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 		g.state.cluster = !g.state.cluster
 	}
 
-	distance := func(x0, y0, x1, y1 int) int {
-		dx := x0 - x1
-		dy := y0 - y1
-		return int(math.Sqrt(float64(dx*dx) + float64(dy*dy)))
-	}
+	// distance := func(x0, y0, x1, y1 int) int {
+	// 	dx := x0 - x1
+	// 	dy := y0 - y1
+	// 	return int(math.Sqrt(float64(dx*dx) + float64(dy*dy)))
+	// }
 
-	//radius := 15
-	doSpot := func(x, y int, f func(x, y int, gs *gridspot)) {
-		for i := x - as.st.drawradius; i < x+as.st.drawradius; i++ {
-			if i < 0 || i >= g.width {
-				continue
-			}
-			for j := y - as.st.drawradius; j < y+as.st.drawradius; j++ {
-				if j < 0 || j >= g.height {
-					continue
-				}
-				//fmt.Printf("x0: %d, y0: %d, x1: %d, y1: %d, Dist: %d\n", i, j, x, y, distance(i, j, x, y))
-				if distance(i, j, x, y) > as.st.drawradius {
-					continue
-				}
-				spot := as.field.Get(int(i), int(j))
-				f(int(i), int(j), spot)
-			}
-		}
-	}
+	// //radius := 15
+	// doSpot := func(x, y int, f func(x, y int, gs *gridspot)) {
+	// 	for i := x - as.st.drawradius; i < x+as.st.drawradius; i++ {
+	// 		if i < 0 || i >= g.width {
+	// 			continue
+	// 		}
+	// 		for j := y - as.st.drawradius; j < y+as.st.drawradius; j++ {
+	// 			if j < 0 || j >= g.height {
+	// 				continue
+	// 			}
+	// 			//fmt.Printf("x0: %d, y0: %d, x1: %d, y1: %d, Dist: %d\n", i, j, x, y, distance(i, j, x, y))
+	// 			if distance(i, j, x, y) > as.st.drawradius {
+	// 				continue
+	// 			}
+	// 			spot := as.field.Get(int(i), int(j))
+	// 			f(int(i), int(j), spot)
+	// 		}
+	// 	}
+	// }
 
 	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) && g.state.leftmode == wall {
 		mx, my := ebiten.CursorPosition()
 		//if mx != as.mousePX || my != as.mousePY {
 		doLine(mx, my, as.mousePX, as.mousePY, func(cx, cy int) {
-			doSpot(cx, cy, func(x, y int, spot *gridspot) {
+			doSpot(as, as.st.drawradius, cx, cy, func(x, y int, spot *gridspot) {
 				if spot.Home {
 					return
 				}
@@ -237,7 +268,7 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 		mx, my := ebiten.CursorPosition()
 		//if mx != as.mousePX || my != as.mousePY {
 		doLine(mx, my, as.mousePX, as.mousePY, func(cx, cy int) {
-			doSpot(cx, cy, func(x, y int, spot *gridspot) {
+			doSpot(as, as.st.drawradius, cx, cy, func(x, y int, spot *gridspot) {
 				spot.Wall = false
 				//spot.Home = false
 				spot.Food = 0
@@ -250,7 +281,7 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 		mx, my := ebiten.CursorPosition()
 		//if mx != as.mousePX || my != as.mousePY {
 		doLine(mx, my, as.mousePX, as.mousePY, func(cx, cy int) {
-			doSpot(cx, cy, func(x, y int, spot *gridspot) {
+			doSpot(as, as.st.drawradius, cx, cy, func(x, y int, spot *gridspot) {
 				spot.Wall = false
 				//spot.Home = false
 				spot.Food = as.st.foodcount
@@ -380,15 +411,18 @@ func (as *AntScene) Init(g *Game[GameState], st *GameState) error {
 		}
 	}
 
-	for x := 0; x < 100; x++ {
-		for y := 0; y < 100; y++ {
-			as.field.Get(x, y).Wall = false
-			as.field.Get(x, y).Home = true
-			as.field.Update(x, y)
-		}
-	}
+	// for x := 0; x < 100; x++ {
+	// 	for y := 0; y < 100; y++ {
+	// 		as.field.Get(x, y).Wall = false
+	// 		as.field.Get(x, y).Home = true
+	// 		as.field.Update(x, y)
+	// 	}
+	// }
+	as.SetHome(g)
 
 	for a := range as.ants {
+		as.ants[a].pos.x = g.width / 2
+		as.ants[a].pos.y = g.height / 2
 		as.ants[a].life = as.st.antlife
 		as.ants[a].tex = as.textures[N]
 	}
@@ -457,13 +491,15 @@ func (as *AntScene) Init(g *Game[GameState], st *GameState) error {
 
 	}
 
+	as.LoadGridReader(bytes.NewReader(startGrid))
+
 	return nil
 }
 
 func (as *AntScene) relocateAnts() {
 	for a := range as.ants {
-		as.ants[a].pos.x = 0
-		as.ants[a].pos.y = 0
+		as.ants[a].pos.x = as.field.width / 2
+		as.ants[a].pos.y = as.field.height / 2
 	}
 }
 
@@ -509,6 +545,10 @@ func (as *AntScene) UpdatePherPartial(start, end int) {
 	}
 }
 
+func targetPopulation(as *AntScene, st *GameState) int64 {
+	return as.homelife / (int64(st.antlife) * int64(st.stockpile))
+}
+
 // func (as *AntScene) Update(g *Game[GameState], r *sdl.Renderer, s *GameState) error {
 func (as *AntScene) Update(g *Game[GameState], st *GameState) error {
 	as.st = st
@@ -525,13 +565,23 @@ func (as *AntScene) Update(g *Game[GameState], st *GameState) error {
 		n = 1
 	}
 	for i := 0; i < n; i++ {
-		if len(as.ants) < st.maxants && as.homelife/(int64(st.antlife)*int64(st.stockpile)) > int64(len(as.ants)) {
+		if (len(as.ants) < st.maxants && targetPopulation(as, st) > int64(len(as.ants))) ||
+			len(as.ants) == 0 {
 			as.homelife -= int64(st.antlife)
-			as.ants = append(as.ants, Ant{life: as.st.antlife, tex: as.textures[N]})
+			as.ants = append(as.ants, Ant{
+				life: as.st.antlife,
+				tex:  as.textures[N],
+				dir:  direction(rand.Intn(int(END))),
+				pos: point{
+					x: g.width / 2,
+					y: g.height / 2,
+				},
+			})
 		}
 	}
 
 	if frame%10 == 0 {
+		fmt.Printf("N: %d, \n", n)
 		fmt.Printf("n: %d, homefood: %d, ants: %d, ratio: %d / %d \n",
 			n, as.homelife, len(as.ants), as.homelife/(int64(st.antlife)*int64(st.stockpile)), len(as.ants))
 	}
@@ -946,6 +996,31 @@ func doLine(x0, y0, x1, y1 int, f func(x, y int)) {
 			}
 			error = error + dx
 			y0 = y0 + sy
+		}
+	}
+}
+
+func distance(x0, y0, x1, y1 int) int {
+	dx := x0 - x1
+	dy := y0 - y1
+	return int(math.Sqrt(float64(dx*dx) + float64(dy*dy)))
+}
+
+func doSpot(as *AntScene, radius, x, y int, f func(x, y int, gs *gridspot)) {
+	for i := x - radius; i < x+radius; i++ {
+		if i < 0 || i >= as.st.width {
+			continue
+		}
+		for j := y - radius; j < y+radius; j++ {
+			if j < 0 || j >= as.st.height {
+				continue
+			}
+			//fmt.Printf("x0: %d, y0: %d, x1: %d, y1: %d, Dist: %d\n", i, j, x, y, distance(i, j, x, y))
+			if distance(i, j, x, y) > radius {
+				continue
+			}
+			spot := as.field.Get(int(i), int(j))
+			f(int(i), int(j), spot)
 		}
 	}
 }

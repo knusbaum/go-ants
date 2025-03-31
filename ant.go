@@ -575,8 +575,8 @@ func (a *Ant) Move(an *AntScene) {
 			//a.dir = a.dir.Right(1)
 			i++
 			if i >= 64 {
-				a.pos.x = 1
-				a.pos.y = 1
+				a.pos.x = an.field.width / 2
+				a.pos.y = an.field.height / 2
 				return
 			}
 		}

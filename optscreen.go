@@ -84,6 +84,20 @@ func withProgressiveDuration(f func(i int)) func(int) {
 func makeTexts(st *GameState) []opt {
 	texts := []opt{
 		{
+			name:  "Frames Per Second",
+			value: fmt.Sprintf("%v", ebiten.MaxTPS()),
+			left: func(_ int) {
+				newmax := ebiten.MaxTPS() - 1
+				ebiten.SetMaxTPS(newmax)
+				//ebiten.SetFPSMode(ebiten.FPSModeVsyncOffMaximum)
+			},
+			right: func(_ int) {
+				newmax := ebiten.MaxTPS() + 1
+				ebiten.SetMaxTPS(newmax)
+				//ebiten.SetFPSMode(ebiten.FPSModeVsyncOffMaximum)
+			},
+		},
+		{
 			name:  "Render Pheromones (P)",
 			value: fmt.Sprintf("%t", st.renderPher),
 			left:  func(_ int) { st.renderPher = !st.renderPher },
