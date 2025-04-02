@@ -447,7 +447,7 @@ func (as *AntScene) Init(g *Game[GameState], st *GameState) error {
 	}
 	as.field = f
 
-	ebiten.SetMaxTPS(120)
+	//ebiten.SetMaxTPS(120)
 
 	as.textures = make([]*ebiten.Image, int(END))
 	as.fullTextures = make([]*ebiten.Image, int(END))
