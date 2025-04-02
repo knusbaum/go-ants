@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"sync/atomic"
 
 	"github.com/hajimehoshi/ebiten/v2"
 )
@@ -80,12 +81,14 @@ func (p point) Within(x, y, w, h int) bool {
 }
 
 type Ant struct {
-	pos    point
-	dir    direction
-	food   int
-	marker int
-	life   int
-	tex    *ebiten.Image
+	pos      point
+	dir      direction
+	food     int
+	marker   int
+	life     int
+	tex      *ebiten.Image
+	reassess int
+	period   int
 }
 
 func (a *Ant) WallAt(an *AntScene, d direction) bool {
@@ -439,6 +442,8 @@ func (a *Ant) Update(as *AntScene) bool {
 	return true
 }
 
+var totperiod int32
+
 func (a *Ant) Move(an *AntScene) {
 	a.life -= 1
 	if a.life <= 0 {
@@ -450,17 +455,22 @@ func (a *Ant) Move(an *AntScene) {
 		// 	return
 		// }
 	}
+	if a.period < 1 {
+		a.period = 1
+	}
+	atomic.AddInt32(&totperiod, int32(a.period))
 
 	// We need ants to not always follow exactly the right path, or else they
 	// get stuck following very tight lines, and never explore.
 	//fmt.Printf("Dizziness: %d\n", a.dizziness)
-	if n := rand.Intn(10); n == 0 {
-		// straight := a.SumOctant(an, a.dir, 50)
-		// left := a.SumOctant(an, a.dir.Left(1), 50)
-		// right := a.SumOctant(an, a.dir.Right(1), 50)
+	if n := rand.Intn(a.period); n == 0 {
+		if n := rand.Intn(20); n == 0 {
+			a.period += 1
+			if a.period > 10 {
+				a.period = 10
+			}
+		}
 
-		//const sight = 50
-		//const sight = 10
 		straight := a.Line(an, a.dir, an.st.sight)
 		left := a.Line(an, a.dir.Left(1), an.st.sight)
 		lleft := a.Line(an, a.dir.Left(2), an.st.sight)
@@ -567,19 +577,35 @@ func (a *Ant) Move(an *AntScene) {
 
 	//if g, ok := a.GridAt(an, a.dir); !ok || g.Wall {
 	if a.WallAt(an, a.dir) {
-		a.dir = a.dir.Right((rand.Intn(3) - 1) * 2)
-		g, ok := a.GridAt(an, a.dir)
-		i := 0
-		for ; !ok || g.Wall; g, ok = a.GridAt(an, a.dir) {
-			a.dir = a.dir.Right((rand.Intn(3) - 1) * 2)
-			//a.dir = a.dir.Right(1)
-			i++
-			if i >= 64 {
-				a.pos.x = an.field.width / 2
-				a.pos.y = an.field.height / 2
-				return
+		if a.reassess > 0 && an.st.adaptiveNavigation {
+			a.period -= 4 //-= 1
+			if a.period < 0 {
+				a.period = 0
 			}
 		}
+		a.reassess += 1
+		//if a.reassess > 64 {
+		//	a.pos = an.spawnLocation
+		//}
+		if a.reassess > 2 || !an.st.adaptiveNavigation {
+			a.dir = a.dir.Right((rand.Intn(3) - 1) * 2)
+			g, ok := a.GridAt(an, a.dir)
+			i := 0
+			for ; !ok || g.Wall; g, ok = a.GridAt(an, a.dir) {
+				a.dir = a.dir.Right((rand.Intn(3) - 1) * 2)
+				//a.dir = a.dir.Right(1)
+				i++
+				if i >= 64 {
+					a.pos = an.spawnLocation
+					// a.pos.x = an.field.width / 2
+					// a.pos.y = an.field.height / 2
+					return
+				}
+			}
+		}
+		return
+	} else {
+		a.reassess = 0
 	}
 
 	a.pos = a.pos.PointAt(a.dir)

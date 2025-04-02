@@ -167,8 +167,8 @@ func makeTexts(st *GameState) []opt {
 		{
 			name:  "Max Ant Population",
 			value: fmt.Sprintf("%d", st.maxants),
-			left:  withProgressiveDuration(func(x int) { st.maxants -= x }),
-			right: withProgressiveDuration(func(x int) { st.maxants += x }),
+			left:  withProgressiveDuration(func(x int) { st.maxants -= x * 1000 }),
+			right: withProgressiveDuration(func(x int) { st.maxants += x * 1000 }),
 		},
 		{
 			name:  "Draw Radius",
@@ -179,8 +179,14 @@ func makeTexts(st *GameState) []opt {
 		{
 			name:  "Pheromone Resilience",
 			value: fmt.Sprintf("%d", st.fadedivisor),
-			left:  withProgressiveDuration(func(x int) { st.fadedivisor -= x }),
-			right: withProgressiveDuration(func(x int) { st.fadedivisor += x }),
+			left:  withProgressiveDuration(func(x int) { st.fadedivisor -= x * 10 }),
+			right: withProgressiveDuration(func(x int) { st.fadedivisor += x * 10 }),
+		},
+		{
+			name:  "Adaptive Navigation",
+			value: fmt.Sprintf("%t", st.adaptiveNavigation),
+			left:  func(_ int) { st.adaptiveNavigation = !st.adaptiveNavigation },
+			right: func(_ int) { st.adaptiveNavigation = !st.adaptiveNavigation },
 		},
 	}
 	return texts

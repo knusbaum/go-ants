@@ -24,5 +24,6 @@ func NewGameState(width, height int) GameState {
 	g.fadedivisor = 700
 	g.sight = 15
 	//g.sorttype = none
+	g.adaptiveNavigation = true
 	return g
 }

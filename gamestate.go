@@ -6,6 +6,7 @@ const (
 	wall clickmode = iota
 	food
 	erase
+	home
 	end
 )
 
@@ -17,6 +18,8 @@ func (m clickmode) String() string {
 		return "Food"
 	case erase:
 		return "Erase"
+	case home:
+		return "Home"
 	default:
 		return "Error"
 	}
@@ -70,5 +73,9 @@ type GameState struct {
 	sight       int
 	leftmode    clickmode
 	//sorttype    sorttype
-	cluster bool
+	cluster            bool
+	adaptiveNavigation bool
+
+	// Temp
+	renderperiod int
 }

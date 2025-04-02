@@ -66,6 +66,7 @@ type AntScene struct {
 
 	drawwg         sync.WaitGroup
 	drawworkerData []chan DrawData
+	spawnLocation  point
 }
 
 type gridwork struct {
@@ -120,7 +121,7 @@ func (as *AntScene) LoadGridReader(r io.Reader) error {
 }
 
 func (as *AntScene) SetHome(g *Game[GameState]) {
-	doSpot(as, 30, g.width/2, g.height/2, func(x, y int, spot *gridspot) {
+	doSpot(as, 30, as.spawnLocation.x, as.spawnLocation.y, func(x, y int, spot *gridspot) {
 		*spot = gridspot{}
 		spot.Home = true
 		as.field.Update(x, y)
@@ -222,6 +223,42 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 		g.state.cluster = !g.state.cluster
 	}
 
+	if inpututil.IsKeyJustPressed(ebiten.Key0) {
+		g.state.renderperiod = 10
+	} else if inpututil.IsKeyJustPressed(ebiten.Key1) {
+		g.state.renderperiod = 1
+	} else if inpututil.IsKeyJustPressed(ebiten.Key2) {
+		g.state.renderperiod = 2
+	} else if inpututil.IsKeyJustPressed(ebiten.Key3) {
+		g.state.renderperiod = 3
+	} else if inpututil.IsKeyJustPressed(ebiten.Key4) {
+		g.state.renderperiod = 4
+	} else if inpututil.IsKeyJustPressed(ebiten.Key5) {
+		g.state.renderperiod = 5
+	} else if inpututil.IsKeyJustPressed(ebiten.Key6) {
+		g.state.renderperiod = 6
+	} else if inpututil.IsKeyJustPressed(ebiten.Key7) {
+		g.state.renderperiod = 7
+	} else if inpututil.IsKeyJustPressed(ebiten.Key8) {
+		g.state.renderperiod = 8
+	} else if inpututil.IsKeyJustPressed(ebiten.Key9) {
+		g.state.renderperiod = 9
+	} else if inpututil.IsKeyJustPressed(ebiten.KeyBackquote) {
+		g.state.renderperiod = 0
+	} else if inpututil.IsKeyJustPressed(ebiten.KeyE) {
+		g.state.adaptiveNavigation = !g.state.adaptiveNavigation
+	} else if inpututil.IsKeyJustPressed(ebiten.KeyO) {
+		as.field.Clear()
+		width := as.field.width
+		height := as.field.height
+		m := makeMaze(width/40-1, height/40-1)
+		startx := (width - ((width/40 - 1) * 40)) / 2
+		starty := (height - ((height/40 - 1) * 40)) / 2
+		drawMaze(as, point{startx, starty}, m)
+		drawMazePath(as, point{startx, starty}, m)
+		as.relocateAnts()
+	}
+
 	// distance := func(x0, y0, x1, y1 int) int {
 	// 	dx := x0 - x1
 	// 	dy := y0 - y1
@@ -248,7 +285,25 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 	// 	}
 	// }
 
-	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) && g.state.leftmode == wall {
+	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) && g.state.leftmode == home {
+		// Clear out the home
+		for y := 0; y < g.height; y++ {
+			for x := 0; x < g.width; x++ {
+				spot := as.field.Get(x, y)
+				spot.Home = false
+				as.field.Update(x, y)
+			}
+		}
+		mx, my := ebiten.CursorPosition()
+		as.spawnLocation = point{mx, my}
+		as.SetHome(g)
+		// doSpot(as, as.st.drawradius, mx, my, func(x, y int, spot *gridspot) {
+		// 	*spot = gridspot{}
+		// 	spot.Home = true
+		// 	as.field.Update(x, y)
+		// })
+
+	} else if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) && g.state.leftmode == wall {
 		mx, my := ebiten.CursorPosition()
 		//if mx != as.mousePX || my != as.mousePY {
 		doLine(mx, my, as.mousePX, as.mousePY, func(cx, cy int) {
@@ -392,6 +447,8 @@ func (as *AntScene) Init(g *Game[GameState], st *GameState) error {
 	}
 	as.field = f
 
+	ebiten.SetMaxTPS(120)
+
 	as.textures = make([]*ebiten.Image, int(END))
 	as.fullTextures = make([]*ebiten.Image, int(END))
 	//for i := N; i < END; i++ {
@@ -418,6 +475,10 @@ func (as *AntScene) Init(g *Game[GameState], st *GameState) error {
 	// 		as.field.Update(x, y)
 	// 	}
 	// }
+	as.spawnLocation = point{
+		x: g.width / 2,
+		y: g.height / 2,
+	}
 	as.SetHome(g)
 
 	for a := range as.ants {
@@ -425,6 +486,7 @@ func (as *AntScene) Init(g *Game[GameState], st *GameState) error {
 		as.ants[a].pos.y = g.height / 2
 		as.ants[a].life = as.st.antlife
 		as.ants[a].tex = as.textures[N]
+		as.ants[a].period = 10
 	}
 	if as.homelife == 0 {
 		as.homelife = int64(len(as.ants)) * int64(as.st.antlife) * int64(as.st.stockpile)
@@ -498,8 +560,7 @@ func (as *AntScene) Init(g *Game[GameState], st *GameState) error {
 
 func (as *AntScene) relocateAnts() {
 	for a := range as.ants {
-		as.ants[a].pos.x = as.field.width / 2
-		as.ants[a].pos.y = as.field.height / 2
+		as.ants[a].pos = as.spawnLocation
 	}
 }
 
@@ -560,30 +621,32 @@ func (as *AntScene) Update(g *Game[GameState], st *GameState) error {
 	}
 	frame++
 
-	n := as.st.maxants / as.st.antlife
-	if n == 0 {
-		n = 1
-	}
+	// n is the minimum number of ants we must create per frame
+	// in order to be able to reach maxants ants,
+	// since each ant lives exactly antlife frames.
+	n := as.st.maxants / as.st.antlife //TODO: this should be ceiling(n) ?
+	n += 1
+	// if n == 0 {
+	// 	// always create at least one ant per frame.
+	// 	n = 1
+	// }
 	for i := 0; i < n; i++ {
-		if (len(as.ants) < st.maxants && targetPopulation(as, st) > int64(len(as.ants))) ||
+		if (len(as.ants) < st.maxants && int64(len(as.ants)) < targetPopulation(as, st)) ||
 			len(as.ants) == 0 {
 			as.homelife -= int64(st.antlife)
 			as.ants = append(as.ants, Ant{
-				life: as.st.antlife,
-				tex:  as.textures[N],
-				dir:  direction(rand.Intn(int(END))),
-				pos: point{
-					x: g.width / 2,
-					y: g.height / 2,
-				},
+				life:   as.st.antlife,
+				tex:    as.textures[N],
+				dir:    direction(rand.Intn(int(END))),
+				pos:    as.spawnLocation,
+				period: 10,
 			})
 		}
 	}
 
 	if frame%10 == 0 {
-		fmt.Printf("N: %d, \n", n)
-		fmt.Printf("n: %d, homefood: %d, ants: %d, ratio: %d / %d \n",
-			n, as.homelife, len(as.ants), as.homelife/(int64(st.antlife)*int64(st.stockpile)), len(as.ants))
+		fmt.Printf("n: %d, homefood: %d, ants: %d, ratio: %d / %d minperiod: %v\n",
+			n, as.homelife, len(as.ants), as.homelife/(int64(st.antlife)*int64(st.stockpile)), len(as.ants), int(totperiod)/len(as.ants))
 	}
 
 	// partsize := (len(as.ants) / workers) + 1
@@ -591,6 +654,7 @@ func (as *AntScene) Update(g *Game[GameState], st *GameState) error {
 	// 	as.UpdateAntPartial((partsize * i), (partsize*i)+partsize)
 	// }
 
+	totperiod = 0
 	if st.parallel {
 		as.antwg.Add(workers)
 		for i := 0; i < workers; i++ {
@@ -925,6 +989,9 @@ func (as *AntScene) Draw(g *Game[GameState], st *GameState, screen *ebiten.Image
 		} else {
 			var dio ebiten.DrawImageOptions
 			for a := range as.ants {
+				if g.state.renderperiod > 0 && as.ants[a].period != g.state.renderperiod {
+					continue
+				}
 				//if as.ants[a].food > 0 {
 				im := as.ants[a].tex
 				dio.GeoM = ebiten.GeoM{}
@@ -939,12 +1006,15 @@ func (as *AntScene) Draw(g *Game[GameState], st *GameState, screen *ebiten.Image
 			}
 		}
 	}
-	msg := fmt.Sprintf("FPS: %02.f, Ticks/Sec: %0.2f, Draw Radius: %d, Hive Life: %d, Ants: %d, Brush: %s, Cluster: %v",
-		ebiten.ActualFPS(), ebiten.ActualTPS(), st.drawradius, as.homelife, len(as.ants), as.st.leftmode, st.cluster)
+	msg := fmt.Sprintf("FPS: %02.f, Ticks/Sec: %0.2f, Draw Radius: %d, Ants: %d/%d, Brush: %s",
+		ebiten.ActualFPS(), ebiten.ActualTPS(), st.drawradius, len(as.ants), as.homelife/(int64(st.antlife)*int64(st.stockpile)), as.st.leftmode)
+	if as.st.cluster {
+		msg += fmt.Sprintf(", (Clustering)")
+	}
 	start := antsceneFontSize * 2
 	text.Draw(screen, msg, mplusNormalFont, 10, start, color.White)
 	text.Draw(screen, "(M) menu", mplusNormalFont, 10, start+antsceneFontSpace, color.White)
-	text.Draw(screen, fmt.Sprintf("maxperchunk: %d, chunksize: %d", maxperchunk, chunksize), mplusNormalFont, 10, start+(antsceneFontSpace*2), color.White)
+	//text.Draw(screen, fmt.Sprintf("maxperchunk: %d, chunksize: %d", maxperchunk, chunksize), mplusNormalFont, 10, start+(antsceneFontSpace*2), color.White)
 	return
 }
 
