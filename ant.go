@@ -81,14 +81,15 @@ func (p point) Within(x, y, w, h int) bool {
 }
 
 type Ant struct {
-	pos      point
-	dir      direction
-	food     int
-	marker   int
-	life     int
-	tex      *ebiten.Image
-	reassess int
-	period   int
+	pos           point
+	dir           direction
+	food          int
+	marker        int
+	life          int
+	tex           *ebiten.Image
+	reassess      int
+	period        int
+	smellhandicap int
 }
 
 func (a *Ant) WallAt(an *AntScene, d direction) bool {
@@ -482,13 +483,22 @@ func (a *Ant) Move(an *AntScene) {
 				a.pos.x, a.pos.y, a.dir, straight, left, right, lleft, rright))
 		}
 
+		randomness := a.smellhandicap
+
 		// Directions include weighted values of their left and right directions
-		straight.FoodPher += left.FoodPher/2 + right.FoodPher/2
-		straight.HomePher += left.HomePher/2 + right.HomePher/2
-		left.FoodPher += lleft.FoodPher/2 + straight.FoodPher/2
-		left.HomePher += lleft.HomePher/2 + straight.HomePher/2
-		right.FoodPher += rright.FoodPher/2 + straight.FoodPher/2
-		right.HomePher += rright.HomePher/2 + straight.HomePher/2
+		straight.FoodPher += left.FoodPher/2 + right.FoodPher/2 - randomness
+		straight.HomePher += left.HomePher/2 + right.HomePher/2 - randomness
+		left.FoodPher += lleft.FoodPher/2 + straight.FoodPher/2 - randomness
+		left.HomePher += lleft.HomePher/2 + straight.HomePher/2 - randomness
+		right.FoodPher += rright.FoodPher/2 + straight.FoodPher/2 - randomness
+		right.HomePher += rright.HomePher/2 + straight.HomePher/2 - randomness
+
+		straight.FoodPher = positivei(straight.FoodPher)
+		straight.HomePher = positivei(straight.HomePher)
+		left.FoodPher = positivei(left.FoodPher)
+		left.HomePher = positivei(left.HomePher)
+		right.FoodPher = positivei(right.FoodPher)
+		right.HomePher = positivei(right.HomePher)
 
 		followingPher := false
 		if a.food > 0 { //|| a.life < antlife/2 { // go home if we have food or we need food

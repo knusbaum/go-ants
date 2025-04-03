@@ -5,6 +5,7 @@ package main
 import (
 	"log"
 	"os"
+	"runtime"
 	"runtime/pprof"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -62,6 +63,7 @@ const (
 // func (s *LineScene) Destroy() {}
 
 func main() {
+	runtime.GOMAXPROCS(4)
 	// if err := sdl.Init(sdl.INIT_EVERYTHING); err != nil {
 	// 	panic(err)
 	// }

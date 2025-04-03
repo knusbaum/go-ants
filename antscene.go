@@ -46,7 +46,7 @@ type DrawData struct {
 
 type AntScene struct {
 	st             *GameState
-	ants           []Ant
+	ants           []*Ant
 	field          *Field[gridspot]
 	textures       []*ebiten.Image
 	fullTextures   []*ebiten.Image
@@ -634,12 +634,13 @@ func (as *AntScene) Update(g *Game[GameState], st *GameState) error {
 		if (len(as.ants) < st.maxants && int64(len(as.ants)) < targetPopulation(as, st)) ||
 			len(as.ants) == 0 {
 			as.homelife -= int64(st.antlife)
-			as.ants = append(as.ants, Ant{
-				life:   as.st.antlife,
-				tex:    as.textures[N],
-				dir:    direction(rand.Intn(int(END))),
-				pos:    as.spawnLocation,
-				period: 10,
+			as.ants = append(as.ants, &Ant{
+				life:          as.st.antlife,
+				tex:           as.textures[N],
+				dir:           direction(rand.Intn(int(END))),
+				pos:           as.spawnLocation,
+				period:        10,
+				smellhandicap: rand.Intn(20000),
 			})
 		}
 	}
@@ -1025,6 +1026,13 @@ func (as *AntScene) RenderBelow() bool {
 func absi(i int) int {
 	if i < 0 {
 		return -i
+	}
+	return i
+}
+
+func positivei(i int) int {
+	if i < 0 {
+		return 0
 	}
 	return i
 }

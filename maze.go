@@ -33,7 +33,7 @@ func makeMaze(x, y int) Maze {
 		}
 	}
 	m[0][0] = node_none
-	generateMaze(m, 0, 0, x*y*10)
+	generateMaze(m, 0, 0, x*y*100)
 	return m
 }
 
