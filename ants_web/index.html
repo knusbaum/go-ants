@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+  <script src="./wasm_exec.js"></script>
+  <script>
+	// Polyfill
+	if (!WebAssembly.instantiateStreaming) {
+		WebAssembly.instantiateStreaming = async (resp, importObject) => {
+			const source = await (await resp).arrayBuffer();
+			return await WebAssembly.instantiate(source, importObject);
+		};
+	}
+	
+	const go = new Go();
+	// var dots = 0;
+	// var load = setInterval(function() {
+	// 	var text = "Loading";
+	// 	for(var i = 0; i < dots; i++) {
+	// 		text += "."
+	// 	}
+	// 	document.getElementById("loadtext").textContent = text;
+	// 	dots = dots + 1 % 3;
+	// }, 1000);
+	WebAssembly.instantiateStreaming(fetch("./ants.wasm"), go.importObject).then(result => {
+		go.run(result.instance);
+		document.getElementById("loading").remove();
+		//clearInterval(load);
+	});
+  </script>
+  <head>
+	<title>Ants!</title>
+  </head>
+  <body>
+	<div id="loading" style="width: 100%; display:flex; justify-content:center;">
+	  <div>
+		<h1 id="loadtext">Loading...</h1>
+		<p>(This takes a while)</p>
+	  </div>
+	</div>
+  </body>
+</html>
