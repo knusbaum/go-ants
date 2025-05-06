@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	_ "embed"
 	"encoding/gob"
 	"fmt"
@@ -84,8 +83,8 @@ type renderwork struct {
 
 var _ Scene[GameState] = &AntScene{}
 
-//go:embed start.grid
-var startGrid []byte
+////go:embed start.grid
+//var startGrid []byte
 
 func (as *AntScene) SaveGrid() error {
 	f, err := os.Create("ants.grid")
@@ -140,6 +139,19 @@ func (as *AntScene) SetHome(g *Game[GameState]) {
 }
 
 // func (as *AntScene) HandleEvent(g *Game[GameState], r *sdl.Renderer, e sdl.Event) error {
+
+func (as *AntScene) DoMaze() {
+	as.field.Clear()
+	width := as.field.width
+	height := as.field.height
+	m := makeMaze(width/40-1, height/40-1)
+	startx := (width - ((width/40 - 1) * 40)) / 2
+	starty := (height - ((height/40 - 1) * 40)) / 2
+	drawMaze(as, point{startx, starty}, m)
+	drawMazePath(as, point{startx, starty}, m)
+	as.relocateAnts()
+}
+
 func (as *AntScene) HandleInput(g *Game[GameState]) error {
 	if inpututil.IsKeyJustPressed(ebiten.KeyP) {
 		as.st.renderPher = !as.st.renderPher
@@ -248,15 +260,7 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 	} else if inpututil.IsKeyJustPressed(ebiten.KeyE) {
 		g.state.adaptiveNavigation = !g.state.adaptiveNavigation
 	} else if inpututil.IsKeyJustPressed(ebiten.KeyO) {
-		as.field.Clear()
-		width := as.field.width
-		height := as.field.height
-		m := makeMaze(width/40-1, height/40-1)
-		startx := (width - ((width/40 - 1) * 40)) / 2
-		starty := (height - ((height/40 - 1) * 40)) / 2
-		drawMaze(as, point{startx, starty}, m)
-		drawMazePath(as, point{startx, starty}, m)
-		as.relocateAnts()
+		as.DoMaze()
 	}
 
 	// distance := func(x0, y0, x1, y1 int) int {
@@ -295,6 +299,18 @@ func (as *AntScene) HandleInput(g *Game[GameState]) error {
 			}
 		}
 		mx, my := ebiten.CursorPosition()
+		if mx < 0 {
+			mx = 0
+		}
+		if mx >= as.st.width {
+			mx = as.st.width - 1
+		}
+		if my < 0 {
+			my = 0
+		}
+		if my >= as.st.height {
+			my = as.st.height - 1
+		}
 		as.spawnLocation = point{mx, my}
 		as.SetHome(g)
 		// doSpot(as, as.st.drawradius, mx, my, func(x, y int, spot *gridspot) {
@@ -440,12 +456,14 @@ func drawAntTextures(c color.Color) []*ebiten.Image {
 
 func (as *AntScene) Init(g *Game[GameState], st *GameState) error {
 	as.st = st
-	as.pause = true
+	//as.pause = true
 	f, err := NewField[gridspot](g.width, g.height, as.renderGridspot)
 	if err != nil {
 		return err
 	}
 	as.field = f
+
+	as.homelife = int64(st.antlife) * int64(st.stockpile) * 10000
 
 	//ebiten.SetMaxTPS(120)
 
@@ -553,8 +571,8 @@ func (as *AntScene) Init(g *Game[GameState], st *GameState) error {
 
 	}
 
-	as.LoadGridReader(bytes.NewReader(startGrid))
-
+	//as.LoadGridReader(bytes.NewReader(startGrid))
+	as.DoMaze()
 	return nil
 }
 

@@ -221,12 +221,13 @@ func (s *OptScene) Draw(g *Game[GameState], st *GameState, screen *ebiten.Image)
 	for oi := range s.opts {
 		if oi == s.index {
 			c = color.RGBA{R: 0x55, G: 0xFF, B: 0xff, A: 0xFF}
-			doLine(0, y+2, st.width/2, y+2, func(x, y int) {
+			doLine(0, y+2, optsceneValOffX-10, y+2, func(x, y int) {
+				//doLine(0, y+2, st.width/2, y+2, func(x, y int) {
 				screen.Set(x, y, c)
 			})
 		}
 		text.Draw(screen, fmt.Sprintf("%s", strings.ToUpper(s.opts[oi].name)), s.font, 10, y, c)
-		text.Draw(screen, fmt.Sprintf("%v", strings.ToUpper(s.opts[oi].value)), s.font, 450, y, c)
+		text.Draw(screen, fmt.Sprintf("%v", strings.ToUpper(s.opts[oi].value)), s.font, optsceneValOffX, y, c)
 		y += step
 		// if oi%2 == 1 {
 		// 	c = c1
@@ -241,29 +242,43 @@ func (s *OptScene) Draw(g *Game[GameState], st *GameState, screen *ebiten.Image)
 	}
 
 	texts := []string{
-		"Controls:",
+		"Drawing Controls:",
 		"Left Click - Brush Stroke",
 		"Middle Click - Draw Food",
 		"Right Click - Erase",
-		"P: Toggle Pheromone Rendering",
-		"G: Toggle Green Pheromone Rendering",
-		"R: Toggle Red Pheromone Rendering",
-		"X: Toggle Parallel Execution",
-		"W: Toggle Wall Following",
-		"A: Reset Ants to (0,0)",
-		"S: Save current grid (persists across restarts)",
-		"L: Load the saved grid",
-		"C: Clear the grid",
-		"F: Fill the grid with wall",
-		"M: This menu",
-		"Space: Pause",
 		"Up/Down: Increase and decrease brush radius",
 		"Left/Right: Change the current brush",
+		"",
+		"Graphics:",
+		"P: Toggle Pheromone Visibility",
+		"G: Toggle Green Pheromone Visibility",
+		"R: Toggle Red Pheromone Visibility",
+		"Z: Toggle Ants Visibility",
+		"",
+		"Ant Behavior:",
+		"W: Toggle Wall Following",
+		"E: Toggle Adaptive Navigation",
+		"",
+		"Map Controls:",
+		"A: Return all ants to Home",
+		"C: Clear the grid",
+		"F: Fill the grid with wall",
+		"O: Replace Map With New Maze",
+		"S: Save current grid (persists across restarts)",
+		"L: Load the saved grid",
+		"",
+		"Other:",
+		"X: Toggle Parallel Execution",
+		"M: This menu",
+		"Space: Pause/Resume",
 	}
 
-	y += step
+	//y += step
+	y = optsceneFontSpace
 	for oi := range texts {
-		text.Draw(screen, strings.ToUpper(fmt.Sprintf("%s", texts[oi])), s.font, 10, y, color.White)
+		//text.Draw(screen, strings.ToUpper(fmt.Sprintf("%s", texts[oi])), s.font, 10, y, color.White)
+		text.Draw(screen, strings.ToUpper(fmt.Sprintf("%s", texts[oi])), s.font, st.width/2+10, y, color.White)
+
 		y += step
 	}
 }

@@ -104,11 +104,12 @@ func main() {
 	//ebiten.SetMaxTPS(120)
 	ebiten.SetWindowSize(WIDTH, HEIGHT)
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
-	ebiten.SetWindowTitle("Your game's title")
+	ebiten.SetWindowTitle("Ants")
 
 	g := NewGame[GameState](WIDTH, HEIGHT, NewGameState(WIDTH, HEIGHT))
-	as := &AntScene{homelife: 3000 * 10000 * 100}
+	//as := &AntScene{homelife: 3000 * 10000 * 100}
 	//as.ants = make([]Ant, 20000)
+	as := &AntScene{}
 	err = g.PushScene(as)
 	if err != nil {
 		log.Fatal(err)

@@ -17,9 +17,9 @@ func main() {
 	var err error
 	ebiten.SetWindowSize(WIDTH, HEIGHT)
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
-	ebiten.SetWindowTitle("Your game's title")
+	ebiten.SetWindowTitle("Ants")
 
-	g := NewGame[GameState](WIDTH, HEIGHT, NewGameState(1024, 768))
+	g := NewGame[GameState](WIDTH, HEIGHT, NewGameState(WIDTH, HEIGHT))
 	as := &AntScene{homelife: 10 * 3000 * 10000}
 	err = g.PushScene(as)
 	if err != nil {

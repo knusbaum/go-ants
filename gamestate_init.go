@@ -13,14 +13,10 @@ func NewGameState(width, height int) GameState {
 	g.renderAnts = true
 	g.antlife = 40000
 	g.followWalls = true
-	//g.foodcount = 20
-	//g.foodcount = 20
 	g.foodcount = 200
 	g.foodlife = 2000
 	g.stockpile = 100
-	//g.maxants = 4000
 	g.maxants = 20000
-	//g.maxants = 100000
 	g.drawradius = 20
 	g.fadedivisor = 3000
 	g.sight = 15
